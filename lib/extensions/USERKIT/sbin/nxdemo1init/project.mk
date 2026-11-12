@@ -1,4 +1,4 @@
 NXSDK_EXTENSION_PROJECT := nxdemo1init
 NXSDK_EXTENSION_CLASS := USERKIT
 NXSDK_EXTENSION_INTERFACE_HEADERS := nxdemo1init.h
-NXSDK_EXTENSION_DEPENDENCY_HEADERS := nxinit_runtime.h nxmanage.h
+NXSDK_EXTENSION_DEPENDENCY_HEADERS := nxinit_runtime.h nxmanage.h nxsystem_image.h

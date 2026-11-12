@@ -13,9 +13,7 @@
 #define NXMANAGE_LIBRARIES_CONFIG "/system/boot/libraries.conf"
 #define NXMANAGE_LIBRARY_REGISTRY_PREFIX "system.manage.library."
 #define NXMANAGE_PROFILE_CONFIG "/system/boot/profile"
-#define NXMANAGE_PROJECT_CONFIG "/system/boot/project"
-#define NXMANAGE_PROJECT_MAX 32U
-#define NXMANAGE_PROTO_VERSION UINT32_C(4)
+#define NXMANAGE_PROTO_VERSION UINT32_C(5)
 #define NXMANAGE_REQ_HELLO 0x4E584D00
 #define NXMANAGE_REP_HELLO 0x4E584D03
 #define NXMANAGE_REQ_REGISTER 0x4E584D01
@@ -60,7 +58,7 @@ enum {
  * mask selected by the protected manifest (CAP_ALL or CAP_ALL plus the
  * optional CAP_WINDOW_MANAGE). Only the authenticated init may set it.
  * The request's payload is a sequence of three terminated strings:
- * absolute executable path, blank-separated bounded arguments (0-2),
+ * registered system image identity, blank-separated bounded arguments (0-2),
  * optional srv.* registry key. Data1=slot, data2=mode.
  * A request is authorized ONLY when the kernel-stamped sender is the
  * manager's currently tracked init child; no public handle grants authority.

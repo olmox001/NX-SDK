@@ -19,6 +19,7 @@ NXSDK_CORE_LIB_OBJECTS := \
   $(NXSDK_OBJECT_ROOT)/lib/gfx/theme.o \
   $(NXSDK_OBJECT_ROOT)/lib/math.o \
   $(NXSDK_OBJECT_ROOT)/lib/font_lib.o \
+  $(NXSDK_OBJECT_ROOT)/lib/extensions/USERKIT/manager/image_client.o \
   $(NXSDK_OBJECT_ROOT)/lib/extensions/USERKIT/nxntfy_srv/client.o \
   $(NXSDK_OBJECT_ROOT)/lib/extensions/object/port_client.o \
   $(NXSDK_OBJECT_ROOT)/lib/extensions/USERKIT/nxexecd/client.o \
