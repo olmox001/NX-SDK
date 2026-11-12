@@ -59,8 +59,9 @@ include sdk.mk
 SDK_CFLAGS := $(COMMON_FLAGS) $(ARCH_CFLAGS) $(NXSDK_INCLUDE_FLAGS) \
               $(SDK_EXTERNAL_FLAGS) -ffunction-sections -fdata-sections
 NXSDK_ARCHIVE := $(BUILD_DIR)/libnxsdk.a
+NXSDK_CORE_ARCHIVE := $(BUILD_DIR)/libnxsdk-core.a
 
-.PHONY: all core module archive check check-contracts check-toolchain check-external clean help
+.PHONY: all core module core-archive archive check check-contracts check-toolchain check-external clean help install-tools install-headers install-runtime install-runtime-core install-sdk
 all: core
 
 core: $(NXSDK_CORE_OBJECTS)
@@ -69,8 +70,16 @@ core: $(NXSDK_CORE_OBJECTS)
 module: check-external $(NXSDK_MODULE_OBJECTS)
 	@echo "NX-SDK full module built for $(ARCH)"
 
+core-archive: core $(NXSDK_CORE_ARCHIVE)
+	@echo "NX-SDK core archive: $(NXSDK_CORE_ARCHIVE)"
+
 archive: module $(NXSDK_ARCHIVE)
 	@echo "NX-SDK archive: $(NXSDK_ARCHIVE)"
+
+$(NXSDK_CORE_ARCHIVE): $(NXSDK_CORE_LIB_OBJECTS) $(NXSDK_MALLOC_OBJECT)
+	@mkdir -p $(dir $@)
+	@rm -f $@
+	@$(AR) rcs $@ $^
 
 $(NXSDK_ARCHIVE): $(NXSDK_LIB_OBJECTS) $(NXSDK_MALLOC_OBJECT)
 	@mkdir -p $(dir $@)
@@ -120,6 +129,21 @@ $(NXSDK_OBJECT_ROOT)/arch/$(ARCH)/%.o: arch/$(ARCH)/%.S
 DEPS := $(shell find "$(NXSDK_OBJECT_ROOT)" -type f -name '*.d' 2>/dev/null)
 -include $(DEPS)
 
+install-tools:
+	@tools/install-sdk.sh --component tools --prefix "$(PREFIX)"
+
+install-headers:
+	@tools/install-sdk.sh --component headers --prefix "$(PREFIX)"
+
+install-runtime-core: core-archive
+	@tools/install-sdk.sh --component runtime --variant core --arch "$(ARCH)" --build-root "$(abspath $(BUILD_ROOT))" --prefix "$(PREFIX)"
+
+install-runtime: archive
+	@tools/install-sdk.sh --component runtime --variant full --arch "$(ARCH)" --build-root "$(abspath $(BUILD_ROOT))" --prefix "$(PREFIX)"
+
+install-sdk: archive
+	@tools/install-sdk.sh --component all --variant full --arch "$(ARCH)" --build-root "$(abspath $(BUILD_ROOT))" --prefix "$(PREFIX)"
+
 clean:
 	@rm -rf "$(BUILD_ROOT)"
 
@@ -127,6 +151,8 @@ help:
 	@echo "NX-SDK targets:"
 	@echo "  core     build SDK-owned core without optional media decoder headers"
 	@echo "  module   build the full integration object set"
+	@echo "  core-archive build installable core runtime archive"
 	@echo "  archive  build the full runtime archive after module"
 	@echo "  check    verify toolchain versions and build the full module"
-	@echo "Variables: ARCH=amd64|aarch64 BUILD_ROOT=... STB_INCLUDE=... PL_MPEG_INCLUDE=..."
+	@echo "  install-tools/headers/runtime install versioned SDK components (PREFIX=...)"
+	@echo "Variables: ARCH=amd64|aarch64 BUILD_ROOT=... STB_INCLUDE=... PL_MPEG_INCLUDE=... PREFIX=..."
