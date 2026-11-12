@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <fcntl.h>
 
 struct execsvc_request {
   int service, request[2], reply[2];
@@ -205,6 +206,99 @@ int execsvc_resolve_path(const char *name, char *out, size_t size) {
     return n < 0 || (size_t)n >= size ? -ENAMETOOLONG : 0;
   }
   return 1;
+}
+
+const char *execsvc_basename(const char *path) {
+  if (path == NULL) return "";
+  const char *base = path;
+  for (const char *cursor = path; *cursor != '\0'; ++cursor) {
+    if (*cursor == '/') base = cursor + 1;
+  }
+  return base;
+}
+
+int execsvc_window_stable(int pid, int *last_win, int *stable) {
+  if (pid <= 0 || last_win == NULL || stable == NULL) return 0;
+  int window = window_of_pid(pid);
+  if (window > 0 && window == *last_win)
+    ++(*stable);
+  else
+    *stable = window > 0 ? 1 : 0;
+  *last_win = window;
+  return *stable >= EXECSVC_STABLE_POLLS;
+}
+
+static void execsvc_close_redirection_fds(int fds[], int *nfds) {
+  if (fds == NULL || nfds == NULL) return;
+  for (int i = 0; i < SPAWN_MAX_REDIR && i < *nfds; ++i) {
+    if (fds[i] >= 0 && close(fds[i]) != 0)
+      OS1_report_error("execsvc.redirection_close", errno);
+  }
+  *nfds = 0;
+}
+
+int execsvc_strip_redirections(int *pargc, char *argv[],
+                               struct spawn_redir *redir, int *nredir,
+                               int fds[], int *nfds) {
+  if (pargc == NULL || argv == NULL || redir == NULL || nredir == NULL ||
+      fds == NULL || nfds == NULL || *pargc < 0 ||
+      *pargc > EXECSVC_LOCAL_ARG_MAX) return -EINVAL;
+  int argc = *pargc;
+  int out = 0;
+  int status = 0;
+  *nredir = 0;
+  *nfds = 0;
+  for (int i = 0; i < EXECSVC_LOCAL_ARG_MAX && i < argc && status == 0; ++i) {
+    char *token = argv[i];
+    int child_fd = -1;
+    int flags = 0;
+    const char *name = NULL;
+    if (strcmp(token, "<") == 0) {
+      child_fd = 0; flags = O_RDONLY;
+    } else if (strcmp(token, ">") == 0) {
+      child_fd = 1; flags = O_WRONLY | O_CREAT | O_TRUNC;
+    } else if (strcmp(token, ">>") == 0) {
+      child_fd = 1; flags = O_WRONLY | O_CREAT | O_APPEND;
+    } else if (strcmp(token, "2>") == 0) {
+      child_fd = 2; flags = O_WRONLY | O_CREAT | O_TRUNC;
+    } else if (token[0] == '<' && token[1] != '\0') {
+      child_fd = 0; flags = O_RDONLY; name = token + 1;
+    } else if (token[0] == '2' && token[1] == '>' && token[2] != '\0') {
+      child_fd = 2; flags = O_WRONLY | O_CREAT | O_TRUNC; name = token + 2;
+    } else if (token[0] == '>' && token[1] == '>' && token[2] != '\0') {
+      child_fd = 1; flags = O_WRONLY | O_CREAT | O_APPEND; name = token + 2;
+    } else if (token[0] == '>' && token[1] != '\0') {
+      child_fd = 1; flags = O_WRONLY | O_CREAT | O_TRUNC; name = token + 1;
+    } else {
+      argv[out++] = token;
+    }
+    if (child_fd >= 0) {
+      if (name == NULL) {
+        if (i + 1 >= argc) status = -EINVAL;
+        else name = argv[++i];
+      }
+      if (status == 0 && *nredir >= SPAWN_MAX_REDIR) status = -E2BIG;
+      if (status == 0) {
+        int fd = open(name, flags, 0644);
+        if (fd < 0) status = -errno;
+        else {
+          fds[(*nfds)++] = fd;
+          redir[*nredir].child_fd = child_fd;
+          redir[*nredir].parent_fd = fd;
+          redir[*nredir].source_pid = 0;
+          ++(*nredir);
+        }
+      }
+    }
+  }
+  if (status != 0) {
+    execsvc_close_redirection_fds(fds, nfds);
+    *nredir = 0;
+    return status;
+  }
+  argv[out] = NULL;
+  *pargc = out;
+  return 0;
 }
 
 int execsvc_launch_explicit(const char *path, int argc, char *const argv[],

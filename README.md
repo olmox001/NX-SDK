@@ -51,3 +51,7 @@ NX-CORE consumes NX-SDK only on the development-tool plane. The SDK's libc,
 POSIX/userland API headers and runtime archives are not kernel-image inputs.
 The separate NX-CORE machine extension is a user-mode artifact and may link
 the SDK runtime without changing that kernel boundary.
+
+## USERKIT extension/tooling plane
+
+NX-SDK owns USERKIT public interfaces and reusable clients under `lib/extensions/USERKIT`, plus reusable USERKIT catalog/Power12 tooling under `tools/userkit`. It does not contain USERKIT server entrypoints. Generic `icon` and `input` extensions remain generic SDK extensions rather than being duplicated inside USERKIT.

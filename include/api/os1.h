@@ -22,6 +22,7 @@
 #include <os1_compositor.h>
 #include <os1_input.h>
 #include <os1_time.h>
+#include <nxnotify_service.h>
 /* System statistics snapshot ABI (struct os1_sysstats) — perf §1
  * instrumentation surface, read via OS1_sys_stats() below. */
 #include <sysstats.h>
@@ -237,14 +238,6 @@ void *calloc(size_t nmemb, size_t size);
 long OS1low_ipc_send(int pid, struct ipc_message *msg);
 long OS1low_ipc_recv(int pid, struct ipc_message *msg);
 long OS1low_ipc_try_recv(int pid, struct ipc_message *msg);
-int OS1_notify_post(const char *title, const char *msg);
-int OS1_notify_warn(const char *title,
-                    const char *msg); /* yellow (severity 1) */
-int OS1_notify_error(const char *title,
-                     const char *msg); /* red (severity 2) — was
-                                        * kernel-crash-only (fault.c);
-                                        * now reachable from
-                                        * userland too */
 /* OS1_report_error - map an errno (positive or raw -errno) to a notification
  * by severity class (hard faults -> red, policy denials -> amber, normal
  * control-flow errors -> silent). THE single error-surfacing seam every libc
@@ -254,7 +247,6 @@ void OS1_report_error(const char *ctx, int err);
 int send(int pid, struct ipc_message *msg);
 int recv(int pid, struct ipc_message *msg);
 int try_recv(int pid, struct ipc_message *msg);
-int notify(const char *title, const char *msg);
 
 /* Window Management & Graphics */
 int create_window(int x, int y, int w, int h, const char *title);
@@ -428,10 +420,6 @@ long OS1_object_write(int handle, const void *buf, unsigned long n);
  *
  * NAMING STANDARD for system services (2026-07-18): "OS1nx_<service>".
  */
-#define OS1NX_PORT_EXEC "OS1nx_svc_exec" /* the nxexec execution service */
-#define OS1NX_PORT_TIME "OS1nx_svc_time" /* privileged time/scheduler service */
-#define OS1NX_PORT_NOTIFY "OS1nx_svc_notify" /* capability notification service */
-
 /* OS1_port_create - publish a service port and take its RECEIVE right (making
  * this process its owner).  Fails with -EEXIST if the name is already served,
  * so a rogue process cannot steal a service identity by racing it. */

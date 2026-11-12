@@ -1,0 +1,3 @@
+NXSDK_EXTENSION_PROJECT := nxkeyboardd
+NXSDK_EXTENSION_CLASS := USERKIT
+NXSDK_EXTENSION_INTERFACE_HEADERS := os1_input.h os1_keyboard_layout_provider.h

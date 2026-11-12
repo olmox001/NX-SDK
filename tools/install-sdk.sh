@@ -37,20 +37,66 @@ install_tools() {
   mkdir -p "$DEST/tools" "$DEST/config"
   cp "$SDK_ROOT/config/toolchain-versions.env" "$DEST/config/"
   cp "$SDK_ROOT/config/sdk-version.env" "$DEST/config/"
+  cp "$SDK_ROOT/config/extension-paths.mk" "$DEST/config/"
+  cp "$SDK_ROOT/config/userkit-paths.mk" "$DEST/config/"
   cp "$SDK_ROOT/sdk.mk" "$DEST/"
   cp "$SDK_ROOT/tools/setup-toolchain-linux.sh" "$DEST/tools/"
   cp "$SDK_ROOT/tools/setup-toolchain-macos.sh" "$DEST/tools/"
   cp "$SDK_ROOT/tools/check-contract-snapshot.py" "$DEST/tools/"
-  rm -rf "$DEST/tools/include"
+  rm -rf "$DEST/tools/include" "$DEST/tools/userkit"
   cp -R "$SDK_ROOT/tools/include" "$DEST/tools/include"
+  cp -R "$SDK_ROOT/tools/userkit" "$DEST/tools/userkit"
   chmod +x "$DEST/tools/"*.sh "$DEST/tools/check-contract-snapshot.py"
+  find "$DEST/tools/userkit" -type f -name '*.py' -exec chmod +x {} +
 }
 install_headers() {
-  rm -rf "$DEST/include.tmp"
+  rm -rf "$DEST/include.tmp" "$DEST/lib/extensions"
   mkdir -p "$DEST/include.tmp"
   cp -R "$SDK_ROOT/include/." "$DEST/include.tmp/"
   rm -rf "$DEST/include"
   mv "$DEST/include.tmp" "$DEST/include"
+  while IFS= read -r rel; do
+    [ -n "$rel" ] || continue
+    src="$SDK_ROOT/$rel"
+    dst="$DEST/$rel"
+    mkdir -p "$(dirname "$dst")"
+    cp -R "$src" "$dst"
+  done <<'HDRS'
+lib/extensions/input/include
+lib/extensions/USERKIT/manager/include
+lib/extensions/USERKIT/nxexecd/include
+lib/extensions/USERKIT/nxntfy_srv/include
+lib/extensions/USERKIT/nxpaxd/include
+lib/extensions/USERKIT/nxtimerdd/include
+lib/extensions/USERKIT/nxttyd/include
+lib/extensions/USERKIT/sbin/common/include
+lib/extensions/USERKIT/sbin/nxinit/include
+lib/extensions/USERKIT/sbin/nxdemo1init/include
+lib/extensions/USERKIT/example/nxexample_echo/include
+HDRS
+  mkdir -p "$DEST/lib/extensions/USERKIT"
+  cp "$SDK_ROOT/lib/extensions/USERKIT/catalog.mk" "$DEST/lib/extensions/USERKIT/"
+  cp "$SDK_ROOT/lib/extensions/USERKIT/README.md" "$DEST/lib/extensions/USERKIT/"
+  while IFS= read -r project; do
+    [ -n "$project" ] || continue
+    mkdir -p "$DEST/lib/extensions/USERKIT/$(dirname "$project")"
+    cp "$SDK_ROOT/lib/extensions/USERKIT/$project/project.mk"        "$DEST/lib/extensions/USERKIT/$project/project.mk"
+  done <<'PROJECTS'
+manager
+nxexecd
+nxntfy_srv
+nxtimerdd
+nxpaxd
+nxcompositor
+nxkeyboardd
+nxmoused
+nxttyd
+sbin/common
+sbin/nxinit
+sbin/nxdemo1init
+example/nxnotify_registry
+example/nxexample_echo
+PROJECTS
 }
 install_runtime() {
   local archive object_root archive_name

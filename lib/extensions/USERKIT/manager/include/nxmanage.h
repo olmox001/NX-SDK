@@ -10,8 +10,12 @@
 #define NXMANAGE_PORT "OS1nx_machine_manage"
 #define NXMANAGE_INIT_CONFIG "/system/boot/manager.conf"
 #define NXMANAGE_SERVICES_CONFIG "/system/boot/services.conf"
+#define NXMANAGE_LIBRARIES_CONFIG "/system/boot/libraries.conf"
+#define NXMANAGE_LIBRARY_REGISTRY_PREFIX "system.manage.library."
 #define NXMANAGE_PROFILE_CONFIG "/system/boot/profile"
-#define NXMANAGE_PROTO_VERSION UINT32_C(3)
+#define NXMANAGE_PROJECT_CONFIG "/system/boot/project"
+#define NXMANAGE_PROJECT_MAX 32U
+#define NXMANAGE_PROTO_VERSION UINT32_C(4)
 #define NXMANAGE_REQ_HELLO 0x4E584D00
 #define NXMANAGE_REP_HELLO 0x4E584D03
 #define NXMANAGE_REQ_REGISTER 0x4E584D01
@@ -20,6 +24,13 @@
 #define NXMANAGE_REP_NAME 0x4E584D05
 #define NXMANAGE_REQ_AUTH 0x4E584D06
 #define NXMANAGE_REP_AUTH 0x4E584D07
+#define NXMANAGE_REQ_LIBRARY_NAME 0x4E584D08
+#define NXMANAGE_REP_LIBRARY_NAME 0x4E584D09
+#define NXMANAGE_REQ_LIBRARY_REGISTER 0x4E584D0A
+#define NXMANAGE_REP_LIBRARY_REGISTER 0x4E584D0B
+#define NXMANAGE_LIBRARY_NAME_MAX 24U
+#define NXMANAGE_LIBRARY_PATH_MAX 48U
+#define NXMANAGE_LIBRARY_ABI_MAX 8U
 /* Bounded, unique service name; canonical registry key is
  * system.manage.service.<name>, whose value is one atomic generation record.
  * The service name travels as a separate authenticated PORT message so the
@@ -33,6 +44,7 @@
 
 enum {
   NXMANAGE_SLOTS = 16,       /* per-boot configured service slots */
+  NXMANAGE_LIBRARY_SLOTS = 16, /* per-project global library records */
   NXMANAGE_QUEUE_BUDGET = 32,/* underlying fixed-capacity kernel PORT queue */
   NXMANAGE_POLL_MS = 50,     /* bounded userland supervisor work quantum */
   NXMANAGE_ONCE_TIMEOUT_MS = 60000, /* dependency completion maximum */

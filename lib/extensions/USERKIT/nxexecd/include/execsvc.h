@@ -53,6 +53,7 @@
 
 /* Protocol version: a client and a service built at different times must fail
  * LOUDLY rather than misread each other's layout. */
+#define OS1NX_PORT_EXEC "OS1nx_svc_exec"
 #define EXECSVC_VERSION 3
 
 /* ipc_message.type values for the rendezvous header. */
@@ -135,7 +136,7 @@ struct execsvc_spawn_rep {
  * execsvc_spawn - client stub: ask the execution service to run argv.
  * Returns the child pid, or < 0 if the service is unreachable — callers MUST
  * fall back to spawning directly, because the service is supervised and can be
- * briefly absent across a respawn.  Implemented in user/sys/lib/extensions/services/execsvc_client.c
+ * briefly absent across a respawn.  Implemented in system/lib/USRKIT/nxexecd/client.c
  * (its own unit, so Phase 10a/12 can move service clients out of the libc as a
  * build change rather than another extraction).
  */
@@ -167,6 +168,13 @@ int execsvc_launch_search(int argc, char *argv[], char *resolved,
                           size_t capacity, unsigned int flags,
                           const struct spawn_redir *redirs, int nredir,
                           int user_only);
+
+#define EXECSVC_STABLE_POLLS 6
+const char *execsvc_basename(const char *path);
+int execsvc_window_stable(int pid, int *last_win, int *stable);
+int execsvc_strip_redirections(int *pargc, char *argv[],
+                               struct spawn_redir *redir, int *nredir,
+                               int fds[], int *nfds);
 
 /* Programmer-facing launch choice, independent of the private nxexec UI.
  * FOREGROUND: caller remains job/ctty owner; DETACHED: no inherited ctty;

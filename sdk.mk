@@ -5,7 +5,9 @@ NXSDK_OUTPUT_NAMESPACE ?= system
 NXSDK_BUILD_DIR ?= $(BUILD_DIR)
 NXSDK_OBJECT_ROOT := $(NXSDK_BUILD_DIR)/$(NXSDK_OUTPUT_NAMESPACE)
 
-NXSDK_INCLUDE_FLAGS := -I$(NXSDK_ROOT)/include/contract -I$(NXSDK_ROOT)/include/api
+include $(NXSDK_ROOT)/config/extension-paths.mk
+include $(NXSDK_ROOT)/config/userkit-paths.mk
+NXSDK_INCLUDE_FLAGS := -I$(NXSDK_ROOT)/include/contract -I$(NXSDK_ROOT)/include/api $(NXSDK_EXTENSION_INCLUDE_FLAGS) $(NXSDK_USERKIT_INCLUDE_FLAGS)
 
 NXSDK_CORE_LIB_OBJECTS := \
   $(NXSDK_OBJECT_ROOT)/lib/lib.o \
@@ -14,18 +16,17 @@ NXSDK_CORE_LIB_OBJECTS := \
   $(NXSDK_OBJECT_ROOT)/lib/gfx/raster.o \
   $(NXSDK_OBJECT_ROOT)/lib/gfx/chrome.o \
   $(NXSDK_OBJECT_ROOT)/lib/gfx/decoration.o \
-  $(NXSDK_OBJECT_ROOT)/lib/gfx/tty_model.o \
   $(NXSDK_OBJECT_ROOT)/lib/gfx/theme.o \
   $(NXSDK_OBJECT_ROOT)/lib/math.o \
   $(NXSDK_OBJECT_ROOT)/lib/font_lib.o \
-  $(NXSDK_OBJECT_ROOT)/lib/extensions/input/nxkeyboard_layout.o \
-  $(NXSDK_OBJECT_ROOT)/lib/extensions/services/notify_client.o \
-  $(NXSDK_OBJECT_ROOT)/lib/extensions/services/port_client.o \
-  $(NXSDK_OBJECT_ROOT)/lib/extensions/services/execsvc_client.o \
-  $(NXSDK_OBJECT_ROOT)/lib/extensions/services/time_client.o \
-  $(NXSDK_OBJECT_ROOT)/lib/extensions/services/surface_client.o \
-  $(NXSDK_OBJECT_ROOT)/lib/extensions/services/gfx_buffer.o \
-  $(NXSDK_OBJECT_ROOT)/lib/extensions/services/buffer_client.o \
+  $(NXSDK_OBJECT_ROOT)/lib/extensions/USERKIT/nxntfy_srv/client.o \
+  $(NXSDK_OBJECT_ROOT)/lib/extensions/object/port_client.o \
+  $(NXSDK_OBJECT_ROOT)/lib/extensions/USERKIT/nxexecd/client.o \
+  $(NXSDK_OBJECT_ROOT)/lib/extensions/USERKIT/nxtimerdd/client.o \
+  $(NXSDK_OBJECT_ROOT)/lib/extensions/USERKIT/example/nxexample_echo/client.o \
+  $(NXSDK_OBJECT_ROOT)/lib/extensions/graphics/surface_client.o \
+  $(NXSDK_OBJECT_ROOT)/lib/extensions/graphics/gfx_buffer.o \
+  $(NXSDK_OBJECT_ROOT)/lib/extensions/object/buffer_client.o \
   $(NXSDK_OBJECT_ROOT)/lib/portability/os1_video_platform.o \
   $(NXSDK_OBJECT_ROOT)/lib/portability/d3d9/os1_d3d9_present.o \
   $(NXSDK_OBJECT_ROOT)/lib/portability/opengl/os1_gl_platform.o

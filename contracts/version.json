@@ -3,13 +3,24 @@
   "scopes": {
     "abi": {
       "revision": 1,
-      "paths": ["include/contract"],
+      "paths": [
+        "include/contract"
+      ],
       "snapshot": "contracts/abi-snapshot.sha256"
     },
     "api": {
-      "revision": 1,
-      "paths": ["include/api"],
+      "revision": 2,
+      "paths": [
+        "include/api"
+      ],
       "snapshot": "contracts/api-snapshot.sha256"
+    },
+    "userkit": {
+      "revision": 1,
+      "paths": [
+        "lib/extensions/USERKIT"
+      ],
+      "snapshot": "contracts/userkit-snapshot.sha256"
     }
   }
 }
