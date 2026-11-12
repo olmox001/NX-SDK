@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "scopes": {
+    "abi": {
+      "revision": 1,
+      "paths": ["include/contract"],
+      "snapshot": "contracts/abi-snapshot.sha256"
+    },
+    "api": {
+      "revision": 1,
+      "paths": ["include/api"],
+      "snapshot": "contracts/api-snapshot.sha256"
+    }
+  }
+}
