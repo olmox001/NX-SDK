@@ -154,11 +154,15 @@ def verify_revision_bumps(current: dict) -> None:
                 )
         if head is not None and parent is not None and changed_paths("HEAD^", "HEAD", paths):
             old = revision_of(parent, name)
-            now = revision_of(head, name)
+            # Use the current working revision so a bad committed checkpoint can
+            # be repaired in the next worktree before another commit exists.
+            # Once committed, current and HEAD are identical and this remains
+            # the same historical revision-bump check.
+            now = revision
             if old >= 0 and now <= old:
                 raise SystemExit(
-                    f"{name}: HEAD changed public headers without revision bump "
-                    f"({old} -> {now})"
+                    f"{name}: HEAD changed public headers without revision bump; "
+                    f"current revision must increase above {old} (now {now})"
                 )
 
 

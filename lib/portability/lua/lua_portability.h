@@ -1,6 +1,13 @@
 #ifndef LUA_PORTABILITY_H
 #define LUA_PORTABILITY_H
 
+/* Vendor Lua translation units use this compatibility mode explicitly.
+ * First-party portability sources include the same header but keep normal
+ * NexsOS deprecation diagnostics. */
+#if defined(LUA_NEXSOS_VENDOR)
+#define OS1_EXTERNAL_COMPAT 1
+#endif
+
 /* l_noret: attribute for functions that never return.
  * Lua's ldo.c luaD_throw is marked l_noret but GCC may not see all
  * paths as noreturn (longjmp path). Force the attribute. */

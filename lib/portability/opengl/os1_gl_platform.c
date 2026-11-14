@@ -7,6 +7,19 @@
 
 #include <os1_video_platform.h>
 
+static int os1_gl_pixel_count(int width, int height, size_t *out) {
+  if (!out || width <= 0 || height <= 0)
+    return -EINVAL;
+  size_t w = (size_t)width;
+  size_t h = (size_t)height;
+  if (w > (size_t)-1 / h)
+    return -EOVERFLOW;
+  *out = w * h;
+  if (*out > (size_t)-1 / sizeof(uint32_t))
+    return -EOVERFLOW;
+  return 0;
+}
+
 struct os1_gl_surface {
   uint32_t backend;
   int window;
@@ -36,7 +49,12 @@ int os1_gl_surface_create(const struct os1_gl_surface_params *params,
   surface->backend = info.backend;
   surface->window = -1;
 
-  size_t count = (size_t)params->width * (size_t)params->height;
+  size_t count = 0U;
+  int count_rc = os1_gl_pixel_count(params->width, params->height, &count);
+  if (count_rc != 0) {
+    free(surface);
+    return count_rc;
+  }
   surface->color_buffer = (uint32_t *)malloc(count * sizeof(uint32_t));
   if (!surface->color_buffer) {
     free(surface);
@@ -84,9 +102,14 @@ uint32_t *os1_gl_surface_buffer(struct os1_gl_surface *surface, int *width,
 int os1_gl_surface_swap(struct os1_gl_surface *surface) {
   if (!surface)
     return -EINVAL;
+  size_t count = 0U;
+  int count_rc =
+      os1_gl_pixel_count(surface->width, surface->height, &count);
+  if (count_rc != 0)
+    return count_rc;
   int rc = os1_video_present_argb8888(
       surface->window, 0, 0, surface->width, surface->height,
-      surface->color_buffer, (size_t)surface->width * surface->height);
+      surface->color_buffer, count);
   if (rc < 0)
     return rc;
   os1_video_render();
@@ -98,7 +121,10 @@ int os1_gl_surface_resize(struct os1_gl_surface *surface, int width,
   if (!surface || width <= 0 || height <= 0)
     return -EINVAL;
 
-  size_t count = (size_t)width * (size_t)height;
+  size_t count = 0U;
+  int count_rc = os1_gl_pixel_count(width, height, &count);
+  if (count_rc != 0)
+    return count_rc;
   uint32_t *fresh = (uint32_t *)malloc(count * sizeof(uint32_t));
   if (!fresh)
     return -ENOMEM;

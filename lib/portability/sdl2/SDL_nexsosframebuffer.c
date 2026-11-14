@@ -34,6 +34,20 @@ int NEXSOS_UpdateWindowFramebuffer(_THIS, SDL_Window *window,
     return SDL_SetError("NexsOS framebuffer unavailable");
 
   SDL_Surface *surface = data->framebuffer;
+  if (surface->w <= 0 || surface->h <= 0 || surface->pitch <= 0 ||
+      (surface->pitch % (int)sizeof(uint32_t)) != 0)
+    return SDL_SetError("NexsOS framebuffer geometry invalid");
+  if (numrects > 0 && !rects)
+    return SDL_SetError("NexsOS framebuffer rectangle list missing");
+
+  size_t stride = (size_t)surface->pitch / sizeof(uint32_t);
+  size_t surface_width = (size_t)surface->w;
+  size_t surface_height = (size_t)surface->h;
+  if (stride < surface_width ||
+      surface_height > (size_t)-1 / stride)
+    return SDL_SetError("NexsOS framebuffer bounds invalid");
+  size_t source_count = surface_height * stride;
+
   int first = (numrects > 0) ? 0 : -1;
   int last = (numrects > 0) ? numrects : 1;
   SDL_Rect full = {0, 0, surface->w, surface->h};
@@ -41,13 +55,23 @@ int NEXSOS_UpdateWindowFramebuffer(_THIS, SDL_Window *window,
     SDL_Rect area = (i < 0) ? full : rects[i];
     if (!SDL_IntersectRect(&area, &full, &area))
       continue;
-    const uint32_t *pixels = (const uint32_t *)surface->pixels +
-                             (size_t)area.y * (surface->pitch / 4) + area.x;
-    size_t stride = (size_t)(surface->pitch / 4);
-    size_t source_count = (size_t)surface->h * stride;
+    if (area.x < 0 || area.y < 0 || area.w <= 0 || area.h <= 0)
+      return SDL_SetError("NexsOS framebuffer clip invalid");
+
+    size_t row = (size_t)area.y;
+    size_t column = (size_t)area.x;
+    if (row >= surface_height || column >= surface_width ||
+        row > ((size_t)-1 - column) / stride)
+      return SDL_SetError("NexsOS framebuffer clip out of bounds");
+    size_t offset = row * stride + column;
+    if (offset >= source_count)
+      return SDL_SetError("NexsOS framebuffer offset out of bounds");
+
+    const uint32_t *pixels = (const uint32_t *)surface->pixels + offset;
+    size_t available = source_count - offset;
     if (os1_video_present_argb8888_strided(data->os1_window, area.x, area.y,
                                            area.w, area.h, pixels, stride,
-                                           source_count - (size_t)area.y * stride - area.x) < 0)
+                                           available) < 0)
       return SDL_SetError("NexsOS framebuffer presentation failed");
   }
   os1_video_render();

@@ -81,16 +81,26 @@ static int sw_present(struct os1_d3d9_swapchain *sc,
     y = dirty->y;
     w = dirty->width;
     h = dirty->height;
-    /* Clamp to the backbuffer (D3D9 rejects out-of-range source rects). */
-    if (x < 0 || y < 0 || w <= 0 || h <= 0 || x + w > sc->width ||
-        y + h > sc->height)
+    /* Clamp to the backbuffer without signed addition overflow. */
+    if (x < 0 || y < 0 || w <= 0 || h <= 0 ||
+        w > sc->width || h > sc->height ||
+        x > sc->width - w || y > sc->height - h)
       return -EINVAL;
   }
-  const uint32_t *first_row = sc->backbuffer + (size_t)y * sc->width + x;
-  size_t remaining =
-      (size_t)sc->width * sc->height - ((size_t)y * sc->width + x);
+  if (!sc->backbuffer || sc->width <= 0 || sc->height <= 0)
+    return -EINVAL;
+  size_t surface_width = (size_t)sc->width;
+  size_t surface_height = (size_t)sc->height;
+  if (surface_width > (size_t)-1 / surface_height)
+    return -EOVERFLOW;
+  size_t total_pixels = surface_width * surface_height;
+  size_t offset = (size_t)y * surface_width + (size_t)x;
+  if (offset >= total_pixels)
+    return -EINVAL;
+  const uint32_t *first_row = sc->backbuffer + offset;
+  size_t remaining = total_pixels - offset;
   int rc = os1_video_present_argb8888_strided(sc->window, x, y, w, h,
-                                              first_row, (size_t)sc->width,
+                                              first_row, surface_width,
                                               remaining);
   if (rc < 0)
     return rc;

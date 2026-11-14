@@ -80,6 +80,7 @@
  *   similar names. The directory name 'common' currently means common within
  *   the userland runtime, not shared with NX-CORE.
  */
+#include "posix_environment.h"
 #include <ctype.h>
 #include <errno.h>
 #include <execsvc.h>
@@ -473,13 +474,14 @@ ssize_t getrandom(void *buf, size_t buflen, unsigned int flags) {
     return -1;
   }
   unsigned char *p = (unsigned char *)buf;
-  for (size_t i = 0; i < buflen; ++i) {
-    if ((i & 7) == 0) {
-      unsigned long long v = os1_rand_next();
-      for (int j = 0; j < 8 && i + j < buflen; ++j)
-        p[i + j] = (unsigned char)(v >> (8 * j));
-      i += 7;
-    }
+  for (size_t i = 0U; i < buflen;) {
+    unsigned long long v = os1_rand_next();
+    size_t chunk = buflen - i;
+    if (chunk > 8U)
+      chunk = 8U;
+    for (size_t j = 0U; j < chunk; ++j)
+      p[i + j] = (unsigned char)(v >> (8U * (unsigned int)j));
+    i += chunk;
   }
   return (ssize_t)buflen;
 }
@@ -1568,9 +1570,12 @@ void print_hex(unsigned long val) {
   char buf[18];
   buf[0] = '0';
   buf[1] = 'x';
-  for (int i = 0; i < 16; i++) {
-    int digit = (val >> ((15 - i) * 4)) & 0xF;
-    buf[2 + i] = (digit < 10) ? ('0' + digit) : ('A' + digit - 10);
+  for (size_t i = 0U; i < 16U; ++i) {
+    unsigned int shift = (unsigned int)((15U - i) * 4U);
+    unsigned int digit = (unsigned int)((val >> shift) & 0xFUL);
+    int glyph = digit < 10U ? ('0' + (int)digit)
+                            : ('A' + (int)digit - 10);
+    buf[2U + i] = (char)glyph;
   }
   write(1, buf, 18);
 }
@@ -1767,6 +1772,19 @@ FILE *freopen(const char *filename, const char *mode, FILE *stream) {
 
 static int file_fd(FILE *fp);
 
+static int fstream_advance_pos(FILE *fp, size_t amount) {
+  if (!fp)
+    return -1;
+  if (fp->pos < 0 || amount > (size_t)INT_MAX ||
+      (size_t)fp->pos > (size_t)INT_MAX - amount) {
+    fp->error = 1;
+    errno = EOVERFLOW;
+    return -1;
+  }
+  fp->pos += (int)amount;
+  return 0;
+}
+
 /*
  * fstream_flush - write out the pending write buffer of a positional stream.
  *
@@ -1898,10 +1916,12 @@ size_t fread(void *ptr, size_t size, size_t nmemb, FILE *fp) {
       fp->error = 1;
       return 0;
     }
-    fp->pos += (int)r;
-    if (r == 0 && bytes > read_bytes)
+    size_t got = (size_t)r;
+    if (got > bytes - read_bytes || fstream_advance_pos(fp, got) != 0)
+      return 0;
+    if (got == 0U && bytes > read_bytes)
       fp->eof = 1;
-    read_bytes += r;
+    read_bytes += got;
     return read_bytes / size;
   }
   if (fd >= 0) {
@@ -1928,6 +1948,11 @@ size_t fread(void *ptr, size_t size, size_t nmemb, FILE *fp) {
           fp->eof = 1;
           break;
         }
+        if (r > FILE_RBUF_SIZE) {
+          fp->error = 1;
+          errno = EIO;
+          break;
+        }
         fp->rcount = (int)r;
       }
       size_t avail = (size_t)(fp->rcount - fp->rhead);
@@ -1940,21 +1965,35 @@ size_t fread(void *ptr, size_t size, size_t nmemb, FILE *fp) {
       nx_assert(take > 0 && read_bytes + take <= bytes);
       memcpy(buf + read_bytes, fp->rbuf + fp->rhead, take);
       fp->rhead += (int)take;
-      fp->pos += (int)take;
+      if (fstream_advance_pos(fp, take) != 0)
+        break;
       read_bytes += take;
     }
     return read_bytes / size;
   }
-  int rem_bytes = bytes - read_bytes;
-  int r = file_read(fp->path, buf + read_bytes, rem_bytes, fp->pos);
-  if (r < 0) {
-    fp->error = 1;
-    return 0;
+  while (read_bytes < bytes) {
+    size_t remaining = bytes - read_bytes;
+    int request =
+        remaining > (size_t)INT_MAX ? INT_MAX : (int)remaining;
+    int r = file_read(fp->path, buf + read_bytes, request, fp->pos);
+    if (r < 0) {
+      fp->error = 1;
+      break;
+    }
+    if (r > request) {
+      fp->error = 1;
+      errno = EIO;
+      break;
+    }
+    size_t got = (size_t)r;
+    if (fstream_advance_pos(fp, got) != 0)
+      break;
+    read_bytes += got;
+    if (r < request) {
+      fp->eof = 1;
+      break;
+    }
   }
-  fp->pos += r;
-  read_bytes += r;
-  if (r < rem_bytes)
-    fp->eof = 1;
   return read_bytes / size;
 }
 
@@ -1993,10 +2032,14 @@ size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *fp) {
       fp->error = 1;
       return 0;
     }
-    fp->pos += (int)w;
+    size_t wrote = (size_t)w;
+    if (wrote > bytes || fstream_advance_pos(fp, wrote) != 0) {
+      fp->error = 1;
+      return 0;
+    }
     if (fp->pos > fp->size)
       fp->size = fp->pos;
-    return w / size;
+    return wrote / size;
   }
 
   /* Positional (path-backed) stream: coalesce into the write buffer, flushing a
@@ -2019,7 +2062,8 @@ size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *fp) {
     nx_assert(chunk > 0 && done + chunk <= bytes);
     memcpy(fp->wbuf + fp->wcount, src + done, chunk);
     fp->wcount += (int)chunk;
-    fp->pos += (int)chunk;
+    if (fstream_advance_pos(fp, chunk) != 0)
+      break;
     done += chunk;
   }
   return done / size;
@@ -2030,18 +2074,39 @@ int fseek(FILE *fp, long offset, int whence) {
     return -1;
   /* Persist pending writes before the position moves: the buffer's on-disk
    * offset is derived from the current pos, so it must be flushed here. */
-  fstream_flush(fp);
-  if (whence == SEEK_SET)
-    fp->pos = offset;
-  else if (whence == SEEK_CUR)
-    fp->pos += offset;
-  else if (whence == SEEK_END) {
+  if (fstream_flush(fp) != 0)
+    return -1;
+
+  int64_t base = 0;
+  if (whence == SEEK_SET) {
+    base = 0;
+  } else if (whence == SEEK_CUR) {
+    base = (int64_t)fp->pos;
+  } else if (whence == SEEK_END) {
     if (fp->size < 0)
       fp->size = file_read(fp->path, NULL, 0, 0);
-    fp->pos = fp->size + offset;
+    if (fp->size < 0)
+      return -1;
+    base = (int64_t)fp->size;
+  } else {
+    errno = EINVAL;
+    return -1;
   }
-  if (fp->pos < 0)
-    fp->pos = 0;
+
+  int64_t delta = (int64_t)offset;
+  if ((delta > 0 && base > INT64_MAX - delta) ||
+      (delta < 0 && base < INT64_MIN - delta)) {
+    errno = EOVERFLOW;
+    return -1;
+  }
+  int64_t target = base + delta;
+  if (target < 0)
+    target = 0;
+  if (target > INT_MAX) {
+    errno = EOVERFLOW;
+    return -1;
+  }
+  fp->pos = (int)target;
   /* POSIX: "a successful call to fseek() shall undo any effects of ungetc()".
    * The pushback byte belongs to the OLD position, so carrying it across a seek
    * would inject a stray byte at the new one.  Latent before — the positional
@@ -2280,6 +2345,12 @@ int graphics_text_width(const char *text) {
  * which gives correct two's-complement representation for LONG_MIN.
  */
 long strtol(const char *nptr, char **endptr, int base) {
+  if (!nptr || (base != 0 && (base < 2 || base > 36))) {
+    if (endptr)
+      *endptr = (char *)nptr;
+    errno = EINVAL;
+    return 0;
+  }
   const char *p = nptr;
   while (isspace(*p))
     p++;
@@ -2304,7 +2375,12 @@ long strtol(const char *nptr, char **endptr, int base) {
   if (base == 16 && p[0] == '0' && (p[1] == 'x' || p[1] == 'X'))
     p += 2;
 
-  unsigned long val = 0;
+  const char *digits_start = p;
+  unsigned long val = 0UL;
+  unsigned long ubase = (unsigned long)base;
+  unsigned long limit =
+      neg ? (unsigned long)LONG_MAX + 1UL : (unsigned long)LONG_MAX;
+  int overflow = 0;
   /* R1: rewritten from `while (1) { ...; else break; }` to a loop whose
    * termination is visible in its own header instead of buried in an
    * internal break — behaviourally identical, since isdigit('\0') and
@@ -2314,15 +2390,30 @@ long strtol(const char *nptr, char **endptr, int base) {
     int digit = isdigit((unsigned char)*p)
                     ? *p - '0'
                     : tolower((unsigned char)*p) - 'a' + 10;
-    if (digit >= base)
+    if (digit < 0 || digit >= base)
       break;
-    val = val * base + digit;
+    unsigned long udigit = (unsigned long)digit;
+    if (!overflow) {
+      if (val > (limit - udigit) / ubase)
+        overflow = 1;
+      else
+        val = val * ubase + udigit;
+    }
     p++;
   }
 
   if (endptr)
-    *endptr = (char *)p;
-  return neg ? -(long)val : (long)val;
+    *endptr = (char *)(p == digits_start ? nptr : p);
+  if (overflow) {
+    errno = ERANGE;
+    return neg ? LONG_MIN : LONG_MAX;
+  }
+  if (neg) {
+    if (val == (unsigned long)LONG_MAX + 1UL)
+      return LONG_MIN;
+    return -(long)val;
+  }
+  return (long)val;
 }
 
 /* --- Robust sscanf (Ported from BSD) --- */
@@ -2677,7 +2768,6 @@ int OS1_env_enum(char *buf, size_t size) {
 
 /* The process-local POSIX environ view is owned by posix_environment.c,
  * while OS1_env_* remains the authoritative registry-backed API. */
-extern int os1_posix_environ_init(void);
 
 char *getenv(const char *name) {
 
@@ -2854,6 +2944,10 @@ int stat(const char *path, struct stat *buf)
   }
 
   if (buf) {
+    if (as.size > (uint64_t)INT64_MAX) {
+      errno = EOVERFLOW;
+      return -1;
+    }
     buf->st_size = (off_t)as.size;
     buf->st_mode =
         (as.type == ABI_S_TYPE_DIR) ? (S_IFDIR | 0755) : (S_IFREG | 0644);
@@ -2861,7 +2955,14 @@ int stat(const char *path, struct stat *buf)
     buf->st_uid = 0;
     buf->st_gid = 0;
     buf->st_blksize = 4096;
-    buf->st_blocks = (as.size + 511) / 512;
+    uint64_t block_count =
+        as.size / UINT64_C(512) +
+        (as.size % UINT64_C(512) != 0U ? UINT64_C(1) : UINT64_C(0));
+    if (block_count > (uint64_t)INT64_MAX) {
+      errno = EOVERFLOW;
+      return -1;
+    }
+    buf->st_blocks = (blkcnt_t)block_count;
 
     /* Timestamp temporanei (finché il VFS non li supporta davvero) */
     time_t now = time(NULL);
@@ -2879,6 +2980,23 @@ int stat(const char *path, struct stat *buf)
 #endif
   }
 
+  return 0;
+}
+
+static int statfs_block_count(off_t size, fsblkcnt_t *out) {
+  if (!out || size < 0) {
+    errno = EOVERFLOW;
+    return -1;
+  }
+  uint64_t bytes = (uint64_t)size;
+  uint64_t blocks =
+      bytes / UINT64_C(4096) +
+      (bytes % UINT64_C(4096) != 0U ? UINT64_C(1) : UINT64_C(0));
+  if (blocks > (uint64_t)ULONG_MAX) {
+    errno = EOVERFLOW;
+    return -1;
+  }
+  *out = (fsblkcnt_t)blocks;
   return 0;
 }
 
@@ -2902,7 +3020,8 @@ int statfs(const char *path, struct statfs *buf) {
   buf->f_type = 0x01021994UL; /* tmpfs-like */
   buf->f_bsize = 4096;
   buf->f_frsize = 4096;
-  buf->f_blocks = (st.st_size + 4095) / 4096;
+  if (statfs_block_count(st.st_size, &buf->f_blocks) != 0)
+    return -1;
   buf->f_bfree = buf->f_blocks;
   buf->f_bavail = buf->f_blocks;
   buf->f_files = 0;
@@ -2936,7 +3055,8 @@ int fstatfs(int fd, struct statfs *buf) {
   buf->f_type = 0x01021994UL;
   buf->f_bsize = 4096;
   buf->f_frsize = 4096;
-  buf->f_blocks = (st.st_size + 4095) / 4096;
+  if (statfs_block_count(st.st_size, &buf->f_blocks) != 0)
+    return -1;
   buf->f_bfree = buf->f_blocks;
   buf->f_bavail = buf->f_blocks;
   buf->f_files = 0;
@@ -3238,14 +3358,18 @@ struct tm *localtime(const time_t *timep) {
     return NULL;
 
   time_t t = *timep;
-  result.tm_sec = t % 60;
-  t /= 60;
-  result.tm_min = t % 60;
-  t /= 60;
-  result.tm_hour = t % 24;
-  t /= 24;
+  if (t < 0) {
+    errno = EOVERFLOW;
+    return NULL;
+  }
+  result.tm_sec = (int)(t % (time_t)60);
+  t /= (time_t)60;
+  result.tm_min = (int)(t % (time_t)60);
+  t /= (time_t)60;
+  result.tm_hour = (int)(t % (time_t)24);
+  t /= (time_t)24;
 
-  result.tm_wday = (t + 4) % 7;
+  result.tm_wday = (int)(((t % (time_t)7) + (time_t)4) % (time_t)7);
 
   int year = 1970;
   while (1) {
@@ -3258,19 +3382,19 @@ struct tm *localtime(const time_t *timep) {
     year++;
   }
   result.tm_year = year - 1900;
-  result.tm_yday = t;
+  result.tm_yday = (int)t;
 
   int month_days[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
   if ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0))
     month_days[1] = 29;
 
   int mon = 0;
-  while (t >= month_days[mon]) {
-    t -= month_days[mon];
+  while (mon < 11 && t >= (time_t)month_days[mon]) {
+    t -= (time_t)month_days[mon];
     mon++;
   }
   result.tm_mon = mon;
-  result.tm_mday = t + 1;
+  result.tm_mday = (int)t + 1;
   result.tm_isdst = 0;
   return &result;
 }
@@ -4021,32 +4145,30 @@ int closedir(DIR *dirp) {
 }
 
 size_t strspn(const char *s, const char *accept) {
-  const char *p = s;
-  while (*p) {
+  size_t count = 0U;
+  while (s[count] != '\0') {
     const char *a = accept;
-    while (*a && *a != *p) {
+    while (*a && *a != s[count])
       a++;
-    }
-    if (*a == '\0') {
+    if (*a == '\0')
       break;
-    }
-    p++;
+    count++;
   }
-  return p - s;
+  return count;
 }
 
 size_t strcspn(const char *s, const char *reject) {
-  const char *p = s;
-  while (*p) {
+  size_t count = 0U;
+  while (s[count] != '\0') {
     const char *r = reject;
     while (*r) {
-      if (*p == *r)
-        return p - s;
+      if (s[count] == *r)
+        return count;
       r++;
     }
-    p++;
+    count++;
   }
-  return p - s;
+  return count;
 }
 
 char *strpbrk(const char *s, const char *accept) {
@@ -4286,13 +4408,21 @@ int wcscmp(const wchar_t *s1, const wchar_t *s2) {
     s1++;
     s2++;
   }
-  return *(const unsigned int *)s1 - *(const unsigned int *)s2;
+  if (*s1 < *s2)
+    return -1;
+  if (*s1 > *s2)
+    return 1;
+  return 0;
 }
 
 int wcsncmp(const wchar_t *s1, const wchar_t *s2, size_t n) {
-  for (size_t i = 0; i < n; i++) {
-    if (s1[i] != s2[i] || s1[i] == 0)
-      return *(const unsigned int *)(s1 + i) - *(const unsigned int *)(s2 + i);
+  for (size_t i = 0U; i < n; ++i) {
+    if (s1[i] < s2[i])
+      return -1;
+    if (s1[i] > s2[i])
+      return 1;
+    if (s1[i] == 0)
+      return 0;
   }
   return 0;
 }
@@ -4440,8 +4570,14 @@ int fchdir(int fd) {
 }
 
 unsigned int sleep(unsigned int seconds) {
-  OS1_sleep((unsigned long)seconds * 1000UL);
-  return 0;
+  const unsigned int max_chunk_seconds =
+      (unsigned int)INT_MAX / UINT32_C(1000);
+  while (seconds > max_chunk_seconds) {
+    OS1_sleep((int)(max_chunk_seconds * UINT32_C(1000)));
+    seconds -= max_chunk_seconds;
+  }
+  OS1_sleep((int)(seconds * UINT32_C(1000)));
+  return 0U;
 }
 
 char *stpcpy(char *dest, const char *src) {

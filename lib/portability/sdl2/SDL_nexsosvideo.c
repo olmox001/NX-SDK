@@ -84,9 +84,11 @@ int NEXSOS_CreateWindow(_THIS, SDL_Window *window) {
   const char *title = window->title ? window->title : "SDL2";
   int x = window->x;
   int y = window->y;
-  if (SDL_WINDOWPOS_ISUNDEFINED(x) || SDL_WINDOWPOS_ISCENTERED(x))
+  Uint32 x_bits = (Uint32)x;
+  Uint32 y_bits = (Uint32)y;
+  if (SDL_WINDOWPOS_ISUNDEFINED(x_bits) || SDL_WINDOWPOS_ISCENTERED(x_bits))
     x = 60;
-  if (SDL_WINDOWPOS_ISUNDEFINED(y) || SDL_WINDOWPOS_ISCENTERED(y))
+  if (SDL_WINDOWPOS_ISUNDEFINED(y_bits) || SDL_WINDOWPOS_ISCENTERED(y_bits))
     y = 60;
 
   data->os1_window =
@@ -96,8 +98,9 @@ int NEXSOS_CreateWindow(_THIS, SDL_Window *window) {
     return SDL_SetError("NexsOS window creation failed");
   }
   window->driverdata = data;
-  window->flags &= ~SDL_WINDOW_HIDDEN;
-  window->flags |= SDL_WINDOW_SHOWN | SDL_WINDOW_INPUT_FOCUS;
+  window->flags &= ~(Uint32)SDL_WINDOW_HIDDEN;
+  window->flags |=
+      (Uint32)SDL_WINDOW_SHOWN | (Uint32)SDL_WINDOW_INPUT_FOCUS;
   ((NEXSOS_VideoData *)_this->driverdata)->focused_window = window;
   SDL_SetMouseFocus(window);
   SDL_SetKeyboardFocus(window);

@@ -891,6 +891,9 @@ float tanf(float x) {
   return s / c;
 }
 
+static const float os1_pi_f = 3.1415927410125732421875f;
+static const float os1_pi_2_f = 1.57079637050628662109375f;
+
 float asinf(float x) {
   float z, r;
   uint32_t ix = __f32_bits(x);
@@ -899,7 +902,7 @@ float asinf(float x) {
     return x - x;
   if (ix >= 0x3f800000u) {
     if (ix == 0x3f800000u)
-      return (ix >> 31) ? -M_PI_2 : M_PI_2;
+      return (ix >> 31) ? -os1_pi_2_f : os1_pi_2_f;
     if (ix > 0x3f800000u)
       return __f32_from_bits(0x7fc00000u);
   }
@@ -911,16 +914,16 @@ float asinf(float x) {
   return r;
 }
 
-float acosf(float x) { return M_PI_2 - asinf(x); }
+float acosf(float x) { return os1_pi_2_f - asinf(x); }
 
 float atanf(float x) {
   float z, r;
   uint32_t ix = __f32_bits(x);
-  int sign = ix >> 31;
+  uint32_t sign = ix >> 31U;
 
   if (ix >= 0x7f800000u) {
     if (ix == 0x7f800000u)
-      return sign ? -M_PI_2 : M_PI_2;
+      return sign ? -os1_pi_2_f : os1_pi_2_f;
     return x - x;
   }
 
@@ -929,7 +932,7 @@ float atanf(float x) {
   if (x > 1.0f) {
     x = 1.0f / x;
     z = x * x;
-    r = M_PI_2 -
+    r = os1_pi_2_f -
         x * (1.0f + z * (-0.3333333432674407958984375f +
                          z * (0.199999988079071044921875f +
                               z * (-0.14285714924335479736328125f +
@@ -951,9 +954,9 @@ float atan2f(float y, float x) {
   if (__float32_isnan(x) || __float32_isnan(y))
     return x + y;
   if (iy == 0)
-    return (ix >> 31) ? (ix == 0x80000000u ? M_PI : 0.0f) : 0.0f;
+    return (ix >> 31) ? (ix == 0x80000000u ? os1_pi_f : 0.0f) : 0.0f;
   if (ix == 0)
-    return (iy >> 31) ? -M_PI_2 : M_PI_2;
+    return (iy >> 31) ? -os1_pi_2_f : os1_pi_2_f;
 
   if (__float32_isinf(x)) {
     if (__float32_isinf(y)) {
@@ -962,13 +965,13 @@ float atan2f(float y, float x) {
                         : ((iy >> 31) ? -0.78539816339744830962f
                                       : 0.78539816339744830962f);
     }
-    return (ix >> 31) ? ((iy >> 31) ? -M_PI : M_PI)
+    return (ix >> 31) ? ((iy >> 31) ? -os1_pi_f : os1_pi_f)
                       : ((iy >> 31) ? -0.0f : 0.0f);
   }
   if (__float32_isinf(y))
-    return (iy >> 31) ? -M_PI_2 : M_PI_2;
+    return (iy >> 31) ? -os1_pi_2_f : os1_pi_2_f;
 
-  return atanf(y / x) + ((x < 0.0f) ? ((y < 0.0f) ? -M_PI : M_PI) : 0.0f);
+  return atanf(y / x) + ((x < 0.0f) ? ((y < 0.0f) ? -os1_pi_f : os1_pi_f) : 0.0f);
 }
 
 /* Double-precision trig */

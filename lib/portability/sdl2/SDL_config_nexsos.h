@@ -17,6 +17,16 @@
 #define HAVE_STDARG_H 1
 #define HAVE_STDDEF_H 1
 #define HAVE_STDINT_H 1
+#define HAVE_STDIO_H 1
+#define HAVE_STRING_H 1
+#define HAVE_VSSCANF 1
+
+/* External SDL sources intentionally use standard legacy string APIs. The
+ * build marks vendor translation units explicitly; first-party portability
+ * sources keep the normal NexsOS deprecation diagnostics. */
+#if defined(SDL_NEXSOS_VENDOR)
+#define OS1_EXTERNAL_COMPAT 1
+#endif
 
 /* Suppress colliding OS1 macros (STACK_SIZE, FP_ONE) when including <stdlib.h> -> <os1.h> */
 #define OS1_NO_COLLIDING_MACROS 1

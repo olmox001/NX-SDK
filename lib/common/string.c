@@ -14,16 +14,16 @@ void bzero(void *s, size_t n);
 
 size_t strlen(const char *s) {
     if (!s) return 0;
-    const char *p = s;
-    while (*p) p++;
-    return p - s;
+    size_t length = 0U;
+    while (s[length] != '\0') ++length;
+    return length;
 }
 
 size_t strnlen(const char *s, size_t maxlen) {
     if (!s) return 0;
-    const char *p = s;
-    while (maxlen-- && *p) p++;
-    return p - s;
+    size_t length = 0U;
+    while (length < maxlen && s[length] != '\0') ++length;
+    return length;
 }
 
 int strcmp(const char *s1, const char *s2) {
@@ -193,8 +193,10 @@ int strcasecmp(const char *s1, const char *s2) {
     if (!s1 || !s2) return (s1 == s2) ? 0 : (s1 ? 1 : -1);
     while (*s1 && *s2) {
         unsigned char c1 = (unsigned char)*s1, c2 = (unsigned char)*s2;
-        if (c1 >= 'A' && c1 <= 'Z') c1 += 'a' - 'A';
-        if (c2 >= 'A' && c2 <= 'Z') c2 += 'a' - 'A';
+        if (c1 >= 'A' && c1 <= 'Z')
+            c1 = (unsigned char)(c1 + (unsigned char)('a' - 'A'));
+        if (c2 >= 'A' && c2 <= 'Z')
+            c2 = (unsigned char)(c2 + (unsigned char)('a' - 'A'));
         if (c1 != c2) return (int)c1 - (int)c2;
         s1++; s2++;
     }
@@ -206,8 +208,10 @@ int strncasecmp(const char *s1, const char *s2, size_t n) {
     if (!s1 || !s2) return (s1 == s2) ? 0 : (s1 ? 1 : -1);
     while (n-- && *s1 && *s2) {
         unsigned char c1 = (unsigned char)*s1, c2 = (unsigned char)*s2;
-        if (c1 >= 'A' && c1 <= 'Z') c1 += 'a' - 'A';
-        if (c2 >= 'A' && c2 <= 'Z') c2 += 'a' - 'A';
+        if (c1 >= 'A' && c1 <= 'Z')
+            c1 = (unsigned char)(c1 + (unsigned char)('a' - 'A'));
+        if (c2 >= 'A' && c2 <= 'Z')
+            c2 = (unsigned char)(c2 + (unsigned char)('a' - 'A'));
         if (c1 != c2) return (int)c1 - (int)c2;
         s1++; s2++;
     }

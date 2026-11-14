@@ -8,7 +8,7 @@
 #include <stdint.h>
 
 /* Prototipi privati */
-static int print_num(char *buf, size_t size, uint64_t num, int base,
+static int print_num(char *buf, size_t size, uint64_t num, uint32_t base,
                      int width, int precision, int flags);
 
 /* Flag per print_num */
@@ -21,7 +21,8 @@ static int print_num(char *buf, size_t size, uint64_t num, int base,
 #define FLAG_SIGN      0x40
 
 int vsnprintf(char *buf, size_t size, const char *fmt, va_list args) {
-    int written = 0, needed = 0;
+    size_t written = 0U;
+    int needed = 0;
     int width, precision, flags;
     uint64_t num;
     const char *s;
@@ -29,7 +30,7 @@ int vsnprintf(char *buf, size_t size, const char *fmt, va_list args) {
 
     while (*fmt) {
         if (*fmt != '%') {
-            if (size > 0 && written < (int)size - 1) buf[written++] = *fmt;
+            if (size > 0U && written < size - 1U) buf[written++] = *fmt;
             needed++;
             fmt++;
             continue;
@@ -87,7 +88,7 @@ int vsnprintf(char *buf, size_t size, const char *fmt, va_list args) {
 
         switch (*fmt) {
             case 'c': {
-                if (size > 0 && written < (int)size - 1)
+                if (size > 0U && written < size - 1U)
                     buf[written++] = (char)va_arg(args, int);
                 needed++;
                 break;
@@ -102,17 +103,17 @@ int vsnprintf(char *buf, size_t size, const char *fmt, va_list args) {
                 }
                 if (!(flags & FLAG_LEFT)) {
                     while (len < width) {
-                        if (size > 0 && written < (int)size - 1) buf[written++] = ' ';
+                        if (size > 0U && written < size - 1U) buf[written++] = ' ';
                         needed++;
                         width--;
                     }
                 }
                 for (int j = 0; j < len; j++) {
-                    if (size > 0 && written < (int)size - 1) buf[written++] = s[j];
+                    if (size > 0U && written < size - 1U) buf[written++] = s[j];
                     needed++;
                 }
                 while (len < width) {
-                    if (size > 0 && written < (int)size - 1) buf[written++] = ' ';
+                    if (size > 0U && written < size - 1U) buf[written++] = ' ';
                     needed++;
                     width--;
                 }
@@ -120,81 +121,98 @@ int vsnprintf(char *buf, size_t size, const char *fmt, va_list args) {
             }
             case 'd':
             case 'i': {
-                if (is_long == 2)      num = va_arg(args, int64_t);
-                else if (is_long == 1) num = va_arg(args, long);
-                else                  num = va_arg(args, int);
-                if ((int64_t)num < 0) {
+                int64_t signed_num;
+                if (is_long == 2)
+                    signed_num = va_arg(args, int64_t);
+                else if (is_long == 1)
+                    signed_num = (int64_t)va_arg(args, long);
+                else
+                    signed_num = (int64_t)va_arg(args, int);
+
+                if (signed_num < 0) {
                     flags |= FLAG_SIGN;
-                    num = -(int64_t)num;
+                    num = UINT64_C(0) - (uint64_t)signed_num;
+                } else {
+                    num = (uint64_t)signed_num;
                 }
-                int n_added = print_num(
-                    size > 0 ? buf + written : NULL,
-                    size > (size_t)written ? size - written : 0,
-                    num, 10, width, precision, flags);
+
+                size_t remaining = size > written ? size - written : 0U;
+                int n_added =
+                    print_num(remaining > 0U ? buf + written : NULL, remaining,
+                              num, UINT32_C(10), width, precision, flags);
                 needed += n_added;
-                if (size > 0 && written < (int)size - 1) {
-                    int add = size - 1 - written;
-                    written += n_added < add ? n_added : add;
+                if (remaining > 0U) {
+                    size_t capacity = remaining - 1U;
+                    size_t committed = (size_t)n_added;
+                    if (committed > capacity) committed = capacity;
+                    written += committed;
                 }
                 break;
             }
             case 'u':
             case 'x':
             case 'X': {
-                if (is_long == 2)      num = va_arg(args, uint64_t);
-                else if (is_long == 1) num = va_arg(args, unsigned long);
-                else                  num = va_arg(args, unsigned int);
+                if (is_long == 2)
+                    num = va_arg(args, uint64_t);
+                else if (is_long == 1)
+                    num = (uint64_t)va_arg(args, unsigned long);
+                else
+                    num = (uint64_t)va_arg(args, unsigned int);
                 if (*fmt == 'X') flags |= FLAG_UPPERCASE;
-                int base = (*fmt == 'u') ? 10 : 16;
-                int n_added = print_num(
-                    size > 0 ? buf + written : NULL,
-                    size > (size_t)written ? size - written : 0,
-                    num, base, width, precision, flags);
+                uint32_t base =
+                    *fmt == 'u' ? UINT32_C(10) : UINT32_C(16);
+                size_t remaining = size > written ? size - written : 0U;
+                int n_added =
+                    print_num(remaining > 0U ? buf + written : NULL, remaining,
+                              num, base, width, precision, flags);
                 needed += n_added;
-                if (size > 0 && written < (int)size - 1) {
-                    int add = size - 1 - written;
-                    written += n_added < add ? n_added : add;
+                if (remaining > 0U) {
+                    size_t capacity = remaining - 1U;
+                    size_t committed = (size_t)n_added;
+                    if (committed > capacity) committed = capacity;
+                    written += committed;
                 }
                 break;
             }
             case 'p': {
-                num = (uint64_t)va_arg(args, void *);
+                num = (uint64_t)(uintptr_t)va_arg(args, void *);
                 char pb[32];
                 int pl = 0;
                 pb[pl++] = '0';
                 pb[pl++] = 'x';
-                pl += print_num(pb + pl, sizeof(pb) - pl, num, 16, 16, -1, FLAG_ZEROPAD);
+                pl += print_num(pb + pl, sizeof(pb) - (size_t)pl, num,
+                                UINT32_C(16), 16, -1, FLAG_ZEROPAD);
                 int pad = width - pl;
                 if (!(flags & FLAG_LEFT)) {
                     for (int k = 0; k < pad; k++) {
-                        if (size > 0 && written < (int)size - 1) buf[written++] = ' ';
+                        if (size > 0U && written < size - 1U) buf[written++] = ' ';
                         needed++;
                     }
                     for (int k = 0; k < pl; k++) {
-                        if (size > 0 && written < (int)size - 1) buf[written++] = pb[k];
+                        if (size > 0U && written < size - 1U) buf[written++] = pb[k];
                         needed++;
                     }
                 } else {
                     for (int k = 0; k < pl; k++) {
-                        if (size > 0 && written < (int)size - 1) buf[written++] = pb[k];
+                        if (size > 0U && written < size - 1U) buf[written++] = pb[k];
                         needed++;
                     }
                     for (int k = 0; k < pad; k++) {
-                        if (size > 0 && written < (int)size - 1) buf[written++] = ' ';
+                        if (size > 0U && written < size - 1U) buf[written++] = ' ';
                         needed++;
                     }
                 }
                 break;
             }
             case '%': {
-                if (size > 0 && written < (int)size - 1) buf[written++] = '%';
+                if (size > 0U && written < size - 1U) buf[written++] = '%';
                 needed++;
                 break;
             }
             default: {
-                if (size > 0 && written < (int)size - 1) buf[written++] = '%';
+                if (size > 0U && written < size - 1U) buf[written++] = '%';
                 needed++;
-                if (size > 0 && written < (int)size - 1) buf[written++] = *fmt;
+                if (size > 0U && written < size - 1U) buf[written++] = *fmt;
                 needed++;
                 break;
             }
@@ -202,24 +220,26 @@ int vsnprintf(char *buf, size_t size, const char *fmt, va_list args) {
         fmt++;
     }
 
-    if (size > 0) buf[written] = '\0';
+    if (size > 0U) buf[written] = '\0';
     return needed;
 }
 
-static int print_num(char *buf, size_t size, uint64_t num, int base,
+static int print_num(char *buf, size_t size, uint64_t num, uint32_t base,
                      int width, int precision, int flags) {
     static const char digits_lower[] = "0123456789abcdef";
     static const char digits_upper[] = "0123456789ABCDEF";
     const char *digits = (flags & FLAG_UPPERCASE) ? digits_upper : digits_lower;
     char tmp[66];
-    int i = 0, written = 0, needed = 0;
+    int i = 0;
+    size_t written = 0U;
+    int needed = 0;
 
-    if (num == 0) {
+    if (num == 0U) {
         tmp[i++] = '0';
     } else {
         while (num != 0) {
-            tmp[i++] = digits[num % base];
-            num /= base;
+            tmp[i++] = digits[(size_t)(num % (uint64_t)base)];
+            num /= (uint64_t)base;
         }
     }
 
@@ -230,40 +250,40 @@ static int print_num(char *buf, size_t size, uint64_t num, int base,
 
     if (!(flags & (FLAG_ZEROPAD | FLAG_LEFT))) {
         while (width > 0) {
-            if (written < (int)size - 1) buf[written++] = ' ';
+            if (size > 0U && written < size - 1U) buf[written++] = ' ';
             needed++;
             width--;
         }
     }
 
     if (flags & FLAG_SIGN) {
-        if (written < (int)size - 1) buf[written++] = '-';
+        if (size > 0U && written < size - 1U) buf[written++] = '-';
         needed++;
     } else if (flags & FLAG_PLUS) {
-        if (written < (int)size - 1) buf[written++] = '+';
+        if (size > 0U && written < size - 1U) buf[written++] = '+';
         needed++;
     } else if (flags & FLAG_SPACE) {
-        if (written < (int)size - 1) buf[written++] = ' ';
+        if (size > 0U && written < size - 1U) buf[written++] = ' ';
         needed++;
     }
 
     if (flags & FLAG_ZEROPAD) {
         while (width > 0) {
-            if (written < (int)size - 1) buf[written++] = '0';
+            if (size > 0U && written < size - 1U) buf[written++] = '0';
             needed++;
             width--;
         }
     }
 
     while (i > 0) {
-        if (written < (int)size - 1) buf[written++] = tmp[--i];
+        if (size > 0U && written < size - 1U) buf[written++] = tmp[--i];
         else i--;
         needed++;
     }
 
     if (flags & FLAG_LEFT) {
         while (width > 0) {
-            if (written < (int)size - 1) buf[written++] = ' ';
+            if (size > 0U && written < size - 1U) buf[written++] = ' ';
             needed++;
             width--;
         }
@@ -318,7 +338,7 @@ int vsscanf(const char *inp, const char *fmt0, va_list ap) {
       fmt++;
     }
 
-    char c = *fmt++;
+    unsigned char c = *fmt++;
     if (c == 'd') {
       while (isspace(*p_inp))
         p_inp++;
@@ -337,9 +357,9 @@ int vsscanf(const char *inp, const char *fmt0, va_list ap) {
       while (isxdigit(*p_inp)) {
         char dc = *p_inp++;
         if (isdigit(dc))
-          val = (val << 4) | (dc - '0');
+          val = (val << 4) | (unsigned int)(dc - '0');
         else
-          val = (val << 4) | (tolower(dc) - 'a' + 10);
+          val = (val << 4) | (unsigned int)(tolower(dc) - 'a' + 10);
       }
       *res = val;
       nassigned++;

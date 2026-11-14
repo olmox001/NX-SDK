@@ -6,6 +6,16 @@
 #include <string.h>
 #include "os1LUA_lib.h"
 
+static void push_u64_field(lua_State *L, const char *name,
+                           unsigned long long value) {
+    if (value > (unsigned long long)LUA_MAXINTEGER) {
+        (void)luaL_error(L, "%s exceeds Lua integer range", name);
+        return;
+    }
+    lua_pushinteger(L, (lua_Integer)value);
+    lua_setfield(L, -2, name);
+}
+
 /* Helper to convert return values to (status, error_msg) or just status */
 static int push_result(lua_State *L, long res) {
     if (res < 0) {
@@ -45,6 +55,7 @@ static int l_get_pid(lua_State *L) {
 
 /* 5. os1.yield() */
 static int l_yield(lua_State *L) {
+    (void)L;
     yield();
     return 0;
 }
@@ -66,7 +77,12 @@ static int l_spawn(lua_State *L) {
     }
     
     int argc = n;
-    char **argv = malloc((argc + 1) * sizeof(char *));
+    size_t argc_size = (size_t)argc;
+    if (argc_size > ((size_t)-1 / sizeof(char *)) - 1U) {
+        return luaL_error(L, "argument vector too large");
+    }
+    size_t argv_count = argc_size + 1U;
+    char **argv = malloc(argv_count * sizeof(*argv));
     if (!argv) {
         return luaL_error(L, "out of memory");
     }
@@ -135,6 +151,7 @@ static int l_window_write(lua_State *L) {
 
 /* 14. os1.compositor_render() */
 static int l_compositor_render(lua_State *L) {
+    (void)L;
     compositor_render();
     return 0;
 }
@@ -186,14 +203,19 @@ static int l_fs_read(lua_State *L) {
         return 1;
     }
     
-    char *buf = malloc(size);
+    size_t request_size = (size_t)size;
+    char *buf = malloc(request_size);
     if (!buf) {
         return luaL_error(L, "out of memory");
     }
     
     int r = file_read(path, buf, size, offset);
     if (r >= 0) {
-        lua_pushlstring(L, buf, r);
+        if (r > size) {
+            free(buf);
+            return luaL_error(L, "filesystem read exceeded requested size");
+        }
+        lua_pushlstring(L, buf, (size_t)r);
         free(buf);
         return 1;
     }
@@ -210,8 +232,12 @@ static int l_fs_write(lua_State *L) {
     size_t len;
     const char *data = luaL_checklstring(L, 2, &len);
     int offset = (int)luaL_optinteger(L, 3, 0);
+    if (len > 2147483647U) {
+        return luaL_error(L, "write buffer exceeds OS1 ABI limit");
+    }
+    int data_len = (int)len;
     
-    int r = file_write(path, data, (int)len, offset);
+    int r = file_write(path, data, data_len, offset);
     return push_result(L, r);
 }
 
@@ -231,7 +257,8 @@ static int l_list_dir(lua_State *L) {
         while (*p) {
             const char *end = p;
             while (*end && *end != '\n') end++;
-            lua_pushlstring(L, p, end - p);
+            size_t entry_len = (size_t)(end - p);
+            lua_pushlstring(L, p, entry_len);
             lua_rawseti(L, -2, idx++);
             if (*end == '\n') p = end + 1;
             else p = end;
@@ -289,30 +316,22 @@ static int l_sysstats(lua_State *L) {
         lua_newtable(L);
         lua_pushinteger(L, stats.version);
         lua_setfield(L, -2, "version");
-        lua_pushinteger(L, stats.uptime_ns);
-        lua_setfield(L, -2, "uptime_ns");
+        push_u64_field(L, "uptime_ns", stats.uptime_ns);
         
         /* PMM */
-        lua_pushinteger(L, stats.pmm_total_pages);
-        lua_setfield(L, -2, "pmm_total_pages");
-        lua_pushinteger(L, stats.pmm_free_pages);
-        lua_setfield(L, -2, "pmm_free_pages");
-        lua_pushinteger(L, stats.pmm_largest_contig_run);
-        lua_setfield(L, -2, "pmm_largest_contig_run");
-        lua_pushinteger(L, stats.pmm_free_run_count);
-        lua_setfield(L, -2, "pmm_free_run_count");
+        push_u64_field(L, "pmm_total_pages", stats.pmm_total_pages);
+        push_u64_field(L, "pmm_free_pages", stats.pmm_free_pages);
+        push_u64_field(L, "pmm_largest_contig_run",
+                       stats.pmm_largest_contig_run);
+        push_u64_field(L, "pmm_free_run_count", stats.pmm_free_run_count);
         
         /* Kmalloc */
-        lua_pushinteger(L, stats.km_heap_total_bytes);
-        lua_setfield(L, -2, "km_heap_total_bytes");
-        lua_pushinteger(L, stats.km_bytes_in_use);
-        lua_setfield(L, -2, "km_bytes_in_use");
-        lua_pushinteger(L, stats.km_high_water_bytes);
-        lua_setfield(L, -2, "km_high_water_bytes");
+        push_u64_field(L, "km_heap_total_bytes", stats.km_heap_total_bytes);
+        push_u64_field(L, "km_bytes_in_use", stats.km_bytes_in_use);
+        push_u64_field(L, "km_high_water_bytes", stats.km_high_water_bytes);
         
         /* Scheduler */
-        lua_pushinteger(L, stats.sched_ctx_switches);
-        lua_setfield(L, -2, "sched_ctx_switches");
+        push_u64_field(L, "sched_ctx_switches", stats.sched_ctx_switches);
         lua_pushinteger(L, stats.sched_nproc);
         lua_setfield(L, -2, "sched_nproc");
         lua_pushinteger(L, stats.sched_zombie_count);

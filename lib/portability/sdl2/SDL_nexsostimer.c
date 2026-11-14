@@ -5,7 +5,7 @@
 
 #if defined(__NEXSOS__) && !defined(SDL_TIMERS_DISABLED)
 
-#include "SDL_timer.h"
+#include "../../sdl/src/timer/SDL_timer_c.h"
 
 /* Mirrors <os1.h> (docs/TIMER-MODEL.md §4); declared directly so OS1's
  * macro surface (STACK_SIZE, FP_ONE, ...) does not leak into SDL units. */

@@ -23,7 +23,7 @@ include config/toolchain-versions.env
 ifeq ($(findstring amd64,$(ARCH)),amd64)
   override ARCH := amd64
   CROSS_COMPILE ?= $(AMD64_CROSS_COMPILE)
-  ARCH_CFLAGS := -DARCH_AMD64 -mno-red-zone -mcmodel=large
+  ARCH_CFLAGS := -DARCH_AMD64 -mno-red-zone -mcmodel=large -Wa,--noexecstack
 else ifeq ($(findstring aarch64,$(ARCH)),aarch64)
   override ARCH := aarch64
   CROSS_COMPILE ?= $(AARCH64_CROSS_COMPILE)
@@ -37,7 +37,7 @@ AR := $(CROSS_COMPILE)ar
 LD := $(CROSS_COMPILE)ld
 HOST_CC ?= cc
 
-NX_WARNINGS_AS_ERRORS ?= 0
+NX_WARNINGS_AS_ERRORS ?= 1
 NX_STRICT ?= 1
 COMMON_FLAGS := -Wall -Wextra -Wpedantic -Wshadow -Wwrite-strings \
   -Wmissing-prototypes -Wstrict-prototypes -Wconversion -Wsign-conversion \
@@ -52,8 +52,11 @@ endif
 
 STB_INCLUDE ?=
 PL_MPEG_INCLUDE ?=
-SDK_EXTERNAL_FLAGS := $(if $(STB_INCLUDE),-I$(STB_INCLUDE)) \
-                      $(if $(PL_MPEG_INCLUDE),-I$(PL_MPEG_INCLUDE))
+# Third-party headers remain in their own warning-qualification scope.  Treat
+# them as system headers so NX_WARNINGS_AS_ERRORS applies to NX-SDK-owned code
+# without turning upstream/vendor warning debt into SDK debt.
+SDK_EXTERNAL_FLAGS := $(if $(STB_INCLUDE),-isystem $(STB_INCLUDE)) \
+                      $(if $(PL_MPEG_INCLUDE),-isystem $(PL_MPEG_INCLUDE))
 
 include sdk.mk
 

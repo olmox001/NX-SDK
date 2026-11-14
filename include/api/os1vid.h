@@ -179,10 +179,15 @@ static void os1vid_video_cb(plm_t *plm, plm_frame_t *frame, void *user) {
   /* Decode into padded buffer with correct stride */
   plm_frame_to_bgra(frame, (uint8_t *)v->pixels, v->luma_width * 4);
 
-  /* Pack it into packed_pixels (discard macroblock padding) */
-  for (int y = 0; y < v->height; y++) {
-    memcpy(&v->packed_pixels[y * v->width], &v->pixels[y * v->luma_width],
-           v->width * 4);
+  /* Pack it into packed_pixels (discard macroblock padding). */
+  if (v->width <= 0 || v->height <= 0 || v->luma_width <= 0)
+    return;
+  size_t width = (size_t)v->width;
+  size_t luma_width = (size_t)v->luma_width;
+  for (int y = 0; y < v->height; ++y) {
+    size_t row = (size_t)y;
+    memcpy(&v->packed_pixels[row * width], &v->pixels[row * luma_width],
+           width * sizeof(uint32_t));
   }
   v->has_frame = 1;
 }

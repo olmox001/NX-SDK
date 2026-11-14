@@ -9,6 +9,7 @@
  * A failed/oversized snapshot reports an error: never produce an apparently
  * valid but silently truncated environ. Each process owns its own storage.
  */
+#include "posix_environment.h"
 #include <errno.h>
 #include <os1.h>
 #include <stddef.h>

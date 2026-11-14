@@ -102,7 +102,7 @@ struct font_ctx *font_load(const char *path) {
   if (size <= 0)
     return NULL;
 
-  void *data = malloc(size);
+  void *data = malloc((size_t)size);
   if (!data)
     return NULL;
 
@@ -241,13 +241,19 @@ void font_draw_string(int win_id, struct font_ctx *ctx, int x, int y,
       rem--;
       continue;
     }
+    size_t step = (size_t)consumed;
+    if (step > rem) {
+      str++;
+      rem--;
+      continue;
+    }
     draw_glyph(win_id, ctx, cursor_x, y, codepoint, color);
     int idx = (int)codepoint - ctx->header.first_char;
     if (idx >= 0 && idx < ctx->header.num_chars) {
       cursor_x += ctx->glyphs[idx].advance;
     }
-    str += consumed;
-    rem -= consumed;
+    str += step;
+    rem -= step;
   }
 }
 
@@ -283,12 +289,18 @@ int font_string_width(struct font_ctx *ctx, const char *str) {
       rem--;
       continue;
     }
+    size_t step = (size_t)consumed;
+    if (step > rem) {
+      str++;
+      rem--;
+      continue;
+    }
     int idx = (int)codepoint - ctx->header.first_char;
     if (idx >= 0 && idx < ctx->header.num_chars) {
       width += ctx->glyphs[idx].advance;
     }
-    str += consumed;
-    rem -= consumed;
+    str += step;
+    rem -= step;
   }
   return width;
 }

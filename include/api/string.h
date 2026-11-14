@@ -4,7 +4,12 @@
 #include <os1.h>
 
 bool str_endswith(const char *string, const char *suffix);
-char *strcpy(char *dest, const char *src) __attribute__((deprecated("use strlcpy/strlcat")));
+#if defined(OS1_EXTERNAL_COMPAT)
+char *strcpy(char *dest, const char *src);
+#else
+char *strcpy(char *dest, const char *src)
+    __attribute__((deprecated("use strlcpy/strlcat")));
+#endif
 char *stpcpy(char *dest, const char *src);
 char *strncpy(char *dest, const char *src, size_t n);
 
@@ -24,7 +29,12 @@ void bzero(void *s, size_t n);
 
 char *strrchr(const char *s, int c);
 char *strstr(const char *haystack, const char *needle);
-char *strcat(char *dest, const char *src) __attribute__((deprecated("use strlcpy/strlcat")));
+#if defined(OS1_EXTERNAL_COMPAT)
+char *strcat(char *dest, const char *src);
+#else
+char *strcat(char *dest, const char *src)
+    __attribute__((deprecated("use strlcpy/strlcat")));
+#endif
 char *strncat(char *dest, const char *src, size_t n);
 char *strtok(char *str, const char *delim);
 char *strtok_r(char *str, const char *delim, char **saveptr);

@@ -43,8 +43,9 @@ install_tools() {
   cp "$SDK_ROOT/tools/setup-toolchain-linux.sh" "$DEST/tools/"
   cp "$SDK_ROOT/tools/setup-toolchain-macos.sh" "$DEST/tools/"
   cp "$SDK_ROOT/tools/check-contract-snapshot.py" "$DEST/tools/"
-  rm -rf "$DEST/tools/include" "$DEST/tools/userkit"
-  cp -R "$SDK_ROOT/tools/include" "$DEST/tools/include"
+  rm -rf "$DEST/external/stb" "$DEST/tools/userkit"
+  mkdir -p "$DEST/external"
+  cp -R "$SDK_ROOT/external/stb" "$DEST/external/stb"
   cp -R "$SDK_ROOT/tools/userkit" "$DEST/tools/userkit"
   chmod +x "$DEST/tools/"*.sh "$DEST/tools/check-contract-snapshot.py"
   find "$DEST/tools/userkit" -type f -name '*.py' -exec chmod +x {} +
