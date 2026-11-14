@@ -35,6 +35,7 @@ endif
 CC := $(CROSS_COMPILE)gcc
 AR := $(CROSS_COMPILE)ar
 LD := $(CROSS_COMPILE)ld
+HOST_CC ?= cc
 
 NX_WARNINGS_AS_ERRORS ?= 0
 NX_STRICT ?= 1
@@ -61,7 +62,7 @@ SDK_CFLAGS := $(COMMON_FLAGS) $(ARCH_CFLAGS) $(NXSDK_INCLUDE_FLAGS) \
 NXSDK_ARCHIVE := $(BUILD_DIR)/libnxsdk.a
 NXSDK_CORE_ARCHIVE := $(BUILD_DIR)/libnxsdk-core.a
 
-.PHONY: all core module core-archive archive check check-contracts check-toolchain check-external clean help install-tools install-headers install-runtime install-runtime-core install-sdk
+.PHONY: all core module core-archive archive check check-contracts check-toolchain check-keyboard-layout check-external clean help install-tools install-headers install-runtime install-runtime-core install-sdk
 all: core
 
 core: $(NXSDK_CORE_OBJECTS)
@@ -86,8 +87,17 @@ $(NXSDK_ARCHIVE): $(NXSDK_LIB_OBJECTS) $(NXSDK_MALLOC_OBJECT)
 	@rm -f $@
 	@$(AR) rcs $@ $^
 
-check: check-contracts check-toolchain module
+check: check-contracts check-toolchain check-keyboard-layout module
 	@echo "NX-SDK $(ARCH) check passed"
+
+check-keyboard-layout:
+	@mkdir -p "$(BUILD_ROOT)/host"
+	@$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic \
+	  -Ilib/extensions/input/include \
+	  lib/extensions/input/nxkeyboard_layout.c \
+	  lib/extensions/input/tests/keyboard_layout_test.c \
+	  -o "$(BUILD_ROOT)/host/keyboard_layout_test"
+	@"$(BUILD_ROOT)/host/keyboard_layout_test"
 
 check-contracts:
 	@python3 tools/check-contract-snapshot.py

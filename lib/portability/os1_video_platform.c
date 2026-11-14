@@ -9,6 +9,10 @@
 
 #define OS1_VIDEO_ABI_VERSION 1u
 
+static int process_self_rendered;
+
+int os1_video_process_self_rendered(void) { return process_self_rendered; }
+
 int os1_video_query(struct os1_video_info *out) {
   if (!out)
     return -EINVAL;
@@ -72,6 +76,7 @@ int os1_video_present_argb8888_strided(int window, int x, int y, int width,
     return -EINVAL;
 
   if (source_stride == row_width) {
+    process_self_rendered = 1;
     _sys_window_blit(window, x, y, width, height, pixels);
     return 0;
   }
@@ -85,6 +90,7 @@ int os1_video_present_argb8888_strided(int window, int x, int y, int width,
     memcpy(packed + row * row_width, pixels + row * source_stride,
            row_width * sizeof(uint32_t));
 
+  process_self_rendered = 1;
   _sys_window_blit(window, x, y, width, height, packed);
   free(packed);
   return 0;

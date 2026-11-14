@@ -69,6 +69,10 @@ int os1_video_window_resize(int window, int width, int height);
 int os1_video_present_argb8888(int window, int x, int y, int width,
                                int height, const uint32_t *pixels,
                                size_t pixel_count);
+/* Process-local rendering classification.  This mirrors the kernel's
+ * self_rendered transition: it becomes true when this process submits its
+ * first pixel BLIT and never depends on focus, title or executable name. */
+int os1_video_process_self_rendered(void);
 /* Present rows whose source pitch is expressed in pixels. This is used by
  * foreign software surfaces (notably SDL) whose pitch is not necessarily
  * width * 4. The kernel ABI still receives only a tightly packed region. */

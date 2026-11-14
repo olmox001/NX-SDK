@@ -381,9 +381,9 @@ int execsvc_launch_search(int argc, char *argv[], char *resolved,
 }
 
 
-/* A hosted application has one independent TTY supervisor and never inherits
- * the launcher's graphics/ctty. The executor (nxexec) and nxttyd retain
- * ownership of graphical classification and foreground job lifecycle. */
+/* TTY hosting is a composition above the base execution model. nxexec and
+ * nxttyd own terminal hosting plus GUI/CLI classification; shell job control
+ * remains a separate nxjobs extension over foreground process capabilities. */
 int execsvc_launch_hosted(int argc, char *const argv[]) {
   if (argc < 1 || argc >= EXECSVC_LOCAL_ARG_MAX || !argv || !argv[0])
     return -EINVAL;
@@ -400,14 +400,6 @@ int execsvc_launch_hosted(int argc, char *const argv[]) {
 int execsvc_launch(int argc, char *argv[], enum execsvc_launch_mode mode,
                    const struct spawn_redir *redirs, int nredir,
                    char *resolved, size_t capacity) {
-  if (mode == EXECSVC_MODE_HOSTED) {
-    if (nredir != 0) return -EINVAL;
-    if (resolved && capacity > 0U) {
-      int n = snprintf(resolved, capacity, "%s", "/sys/bin/nxexec");
-      if (n < 0 || (size_t)n >= capacity) return -ENAMETOOLONG;
-    }
-    return execsvc_launch_hosted(argc, argv);
-  }
   if (mode != EXECSVC_MODE_FOREGROUND && mode != EXECSVC_MODE_DETACHED)
     return -EINVAL;
   return execsvc_launch_search(argc, argv, resolved, capacity,

@@ -208,12 +208,13 @@ long read(int fd, char *buf, unsigned long count) {
  * each session has a distinct named capability and its own compositor window.
  * No process can pick a destination by changing keyboard focus.
  *
- * Native window ownership takes precedence over an inherited TTY session.
- * Kilo creates its own text window and still receives the parent's env:
- * its ANSI stdout must reach the window's native compositor text surface,
- * not disappear into the parent session's PORT. Window ownership is checked
- * per write because a process may create/destroy windows over its lifetime.
- * The native console branch preserves kernel self-rendered isolation. */
+ * Native TEXT-window ownership takes precedence over an inherited TTY
+ * session. Kilo creates its own text window and writes ANSI stdout there.
+ * Pixel/self-rendered applications are different: once they submit a BLIT,
+ * stdout/stderr remains the inherited TTY PORT diagnostic stream instead of
+ * overwriting their pixel surface. Window ownership and the process-local
+ * self-rendered state are checked per write because either may change during
+ * process startup. */
 static long tty_session_write(int fd, const char *buf, size_t count) {
   static int checked, sender = -1;
   static char name[64];
@@ -223,7 +224,12 @@ static long tty_session_write(int fd, const char *buf, size_t count) {
   }
   if (name[0] == '\0' || (fd != 1 && fd != 2) || !isatty(fd))
     return -ENODEV;
-  if (OS1_window_of_pid(getpid()) > 0) return -ENODEV;
+  /* Native text windows (Kilo and other terminal-style apps) keep their
+   * own ANSI renderer.  Pixel/self-rendered GUI children instead retain the
+   * inherited TTY PORT as their diagnostic stdout/stderr stream. */
+  if (!os1_video_process_self_rendered() &&
+      OS1_window_of_pid(getpid()) > 0)
+    return -ENODEV;
   if (sender < 0) {
     long h = OS1low_handle_create(OS1_NS_PORT, name, OS1_RIGHT_WRITE,
                                    OBJ_TYPE_PORT);

@@ -176,15 +176,17 @@ int execsvc_strip_redirections(int *pargc, char *argv[],
                                struct spawn_redir *redir, int *nredir,
                                int fds[], int *nfds);
 
-/* Programmer-facing launch choice, independent of the private nxexec UI.
- * FOREGROUND: caller remains job/ctty owner; DETACHED: no inherited ctty;
- * HOSTED: start /sys/bin/nxexec, whose TTY service supervises the command,
- *         detects independent GUI windows and handles terminal output.
- * Redirections require FOREGROUND or DETACHED (HOSTED rejects them). */
+/* Base execution ownership.  This deliberately excludes TTY/CLI hosting
+ * and shell job control:
+ *   FOREGROUND — normal child/ctty inheritance from the caller;
+ *   DETACHED   — no inherited controlling terminal.
+ *
+ * TTY hosting is a separate composition (execsvc_launch_hosted -> nxexec ->
+ * nxttyd). Job control is a shell/executor extension over foreground process
+ * capabilities (nxjobs), not another launch mode. */
 enum execsvc_launch_mode {
   EXECSVC_MODE_FOREGROUND = 0,
-  EXECSVC_MODE_DETACHED = 1,
-  EXECSVC_MODE_HOSTED = 2
+  EXECSVC_MODE_DETACHED = 1
 };
 int execsvc_launch_hosted(int argc, char *const argv[]);
 int execsvc_launch(int argc, char *argv[], enum execsvc_launch_mode mode,
