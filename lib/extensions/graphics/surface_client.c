@@ -10,6 +10,36 @@ static int resource_open_cached(int *handle, const char *name, unsigned rights) 
   return 0;
 }
 
+long OS1_display_mode_query(uint32_t index, struct os1_display_mode_v1 *mode) {
+  static int handle = -1;
+  if (mode == NULL) return -EINVAL;
+  int result = resource_open_cached(&handle, OS1_RESOURCE_DISPLAY_MODES,
+                                    OS1_RIGHT_READ);
+  if (result != 0) return result;
+  *mode = (struct os1_display_mode_v1){
+      .abi_version = OS1_SURFACE_ABI_VERSION,
+      .struct_size = sizeof(*mode),
+      .operation = OS1_DISPLAY_MODE_QUERY,
+      .index = index};
+  long read = OS1_object_read(handle, mode, sizeof(*mode));
+  if (read < 0) return read;
+  return read == (long)sizeof(*mode) ? 0 : -EIO;
+}
+
+long OS1_display_mode_set(uint32_t index, uint64_t generation) {
+  static int handle = -1;
+  int result = resource_open_cached(&handle, OS1_RESOURCE_DISPLAY_MODES,
+                                    OS1_RIGHT_WRITE);
+  if (result != 0) return result;
+  struct os1_display_mode_v1 mode = {
+      .abi_version = OS1_SURFACE_ABI_VERSION,
+      .struct_size = sizeof(mode),
+      .operation = OS1_DISPLAY_MODE_SET,
+      .index = index,
+      .generation = generation};
+  return OS1_object_write(handle, &mode, sizeof(mode));
+}
+
 long OS1_surface_snapshot(struct os1_window_snapshot_v1 *snapshot) {
   static int handle = -1;
   int result = resource_open_cached(&handle, OS1_RESOURCE_WINDOW_STORAGE, OS1_RIGHT_READ);

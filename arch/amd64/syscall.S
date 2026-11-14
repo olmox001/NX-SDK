@@ -489,3 +489,6 @@ _sys_stat:
     movq $SYS_STAT, %rax
     syscall
     ret
+
+/* Mark this assembly translation unit as not requiring an executable stack. */
+.section .note.GNU-stack,"",@progbits

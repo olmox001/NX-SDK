@@ -1077,6 +1077,20 @@ int OS1_registry_del(const char *key) {
 /* Display / compositor control (ASTRA §6.7): canonical OS1_display_* over the
  * raw _sys_ stubs.  set_font keeps a bare shim; the others had no bare name. */
 long OS1_display_info(void) { return _sys_display_info(); }
+int OS1_display_get_size(int *width, int *height) {
+  if (!width || !height)
+    return -EINVAL;
+  long packed = OS1_display_info();
+  if (packed < 0)
+    return (int)packed;
+  int current_width = (int)(((unsigned long)packed >> 16) & 0xffffUL);
+  int current_height = (int)((unsigned long)packed & 0xffffUL);
+  if (current_width <= 0 || current_height <= 0)
+    return -ENODEV;
+  *width = current_width;
+  *height = current_height;
+  return 0;
+}
 int OS1_display_set_mode(int w, int h) { return _sys_set_display_mode(w, h); }
 int OS1_display_poll(void) { return _sys_display_poll(); }
 static void __theme_broadcast(unsigned type, int first, int second) {
@@ -1108,7 +1122,12 @@ int OS1_display_set_background(int bg_id) {
     __theme_broadcast(0x32u, bg_id, 0);
   return rc;
 }
-int OS1_display_set_zoom(int percent) { return _sys_set_zoom(percent); }
+int OS1_display_set_zoom(int percent) {
+  if (percent < OS1_DISPLAY_ZOOM_MIN_PERCENT ||
+      percent > OS1_DISPLAY_ZOOM_MAX_PERCENT)
+    return -EINVAL;
+  return _sys_set_zoom(percent);
+}
 int OS1_display_set_font(void *data, size_t size) {
   extern int _sys_set_font(void *data, size_t size);
   return _sys_set_font(data, size);

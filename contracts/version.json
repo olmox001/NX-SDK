@@ -2,14 +2,14 @@
   "schema": 1,
   "scopes": {
     "abi": {
-      "revision": 2,
+      "revision": 4,
       "paths": [
         "include/contract"
       ],
       "snapshot": "contracts/abi-snapshot.sha256"
     },
     "api": {
-      "revision": 3,
+      "revision": 5,
       "paths": [
         "include/api"
       ],

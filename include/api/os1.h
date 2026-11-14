@@ -320,6 +320,7 @@ int OS1_window_close(int win_id);
  * over the raw _sys_ stubs (which had no bare wrapper; callers used _sys_
  * directly). DIR-01 F4. */
 long OS1_display_info(void);            /* current desktop, packed (w<<16)|h */
+int OS1_display_get_size(int *width, int *height); /* validated desktop geometry */
 int OS1_display_set_mode(int w, int h); /* set resolution; desktop adapts */
 int OS1_display_poll(void); /* apply pending host resize; 1 if changed */
 int OS1_display_set_style(int style_id, int theme_id); /* -1 = keep */
