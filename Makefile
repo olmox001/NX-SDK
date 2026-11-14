@@ -65,7 +65,7 @@ SDK_CFLAGS := $(COMMON_FLAGS) $(ARCH_CFLAGS) $(NXSDK_INCLUDE_FLAGS) \
 NXSDK_ARCHIVE := $(BUILD_DIR)/libnxsdk.a
 NXSDK_CORE_ARCHIVE := $(BUILD_DIR)/libnxsdk-core.a
 
-.PHONY: all core module core-archive archive check check-contracts check-toolchain check-keyboard-layout check-external clean help install-tools install-headers install-runtime install-runtime-core install-sdk
+.PHONY: all core module core-archive archive check check-contracts check-header-boundary check-toolchain check-keyboard-layout check-external clean help install-tools install-headers install-runtime install-runtime-core install-sdk
 all: core
 
 core: $(NXSDK_CORE_OBJECTS)
@@ -90,7 +90,7 @@ $(NXSDK_ARCHIVE): $(NXSDK_LIB_OBJECTS) $(NXSDK_MALLOC_OBJECT)
 	@rm -f $@
 	@$(AR) rcs $@ $^
 
-check: check-contracts check-toolchain check-keyboard-layout module
+check: check-contracts check-header-boundary check-toolchain check-keyboard-layout module
 	@echo "NX-SDK $(ARCH) check passed"
 
 check-keyboard-layout:
@@ -104,6 +104,10 @@ check-keyboard-layout:
 
 check-contracts:
 	@python3 tools/check-contract-snapshot.py
+
+check-header-boundary:
+	@python3 tools/test_header_boundary.py
+	@python3 tools/check_header_boundary.py
 
 check-external:
 	@test -n "$(STB_INCLUDE)" && test -f "$(STB_INCLUDE)/stb_image.h" || { \
