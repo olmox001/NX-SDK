@@ -55,3 +55,20 @@ the SDK runtime without changing that kernel boundary.
 ## USERKIT extension/tooling plane
 
 NX-SDK owns USERKIT public interfaces and reusable clients under `lib/extensions/USERKIT`, plus reusable USERKIT catalog/Power12 tooling under `tools/userkit`. It does not contain USERKIT server entrypoints. Generic `icon` and `input` extensions remain generic SDK extensions rather than being duplicated inside USERKIT.
+
+## Surface layout and workspace clients (ABI r6)
+
+`include/contract/surface.h`, `include/api/os1_surface.h` and
+`lib/extensions/graphics/surface_client.c` expose the existing-object
+resource protocol for a caller-owned surface's anchor, reserved edge
+area, overlay Z order and requested geometry. The SDK has no
+dependency on NexsOS1 bar/dock names. Physical GPU mode, logical
+desktop base (Auto or Manual) and UI zoom are independent settings.
+
+The shared UTMP record is defined in `include/api/utmp.h` and the
+Gnulib adapter uses the real binary `/etc/utmp` file.
+Zero-length `malloc` yields a freeable pointer for checked Gnulib
+allocations. This is not yet complete POSIX compatibility: real
+`execvp`, FD redirection and `/dev/null` remain outstanding.
+The SDK matches NX-CORE ABI r6, SDK API r8, USERKIT r3 and the
+umbrella graphics suite passed 12/12 in both QEMU guests.

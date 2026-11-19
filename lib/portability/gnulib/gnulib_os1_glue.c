@@ -12,8 +12,16 @@
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <stdbool.h>
 #include <sys/stat.h>
 #include <fpending.h>
+
+/* Gnulib FTS asks whether its openat fallback requires fchdir. Native
+ * NexsOS1 does not yet offer descriptor-anchored path resolution; return
+ * the real limitation rather than claiming a working relative openat. */
+_Bool openat_needs_fchdir(void) {
+    return 1;
+}
 
 /* The GNU progname provider owns program_name. NexsOS getprogname and
  * setprogname share that one canonical value instead of maintaining a

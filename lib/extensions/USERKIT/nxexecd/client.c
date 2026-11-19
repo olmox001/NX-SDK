@@ -381,6 +381,21 @@ int execsvc_launch_search(int argc, char *argv[], char *resolved,
 }
 
 
+/* System-owned UI commands are spawned directly by a trusted system caller,
+ * without replacing its authority with the USER-only hosted-shell policy.
+ * This is the same existing spawn-capability contract used at boot, not an
+ * ambient grant keyed merely on the executable's pathname. */
+int execsvc_launch_system_gui(const char *path) {
+  if (path == NULL || strncmp(path, "/sys/bin/", 9U) != 0 ||
+      path[9] == '\0') return -EINVAL;
+  int level = PLVL_GUEST;
+  unsigned int caps = 0U;
+  int result = OS1_identity(&level, &caps);
+  if (result != 0) return result;
+  if (level > PLVL_ROOT || (caps & CAP_SPAWN) == 0U) return -EPERM;
+  return (int)spawn_level(path, PLVL_ROOT);
+}
+
 /* TTY hosting is a composition above the base execution model. nxexec and
  * nxttyd own terminal hosting plus GUI/CLI classification; shell job control
  * remains a separate nxjobs extension over foreground process capabilities. */

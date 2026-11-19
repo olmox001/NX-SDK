@@ -41,6 +41,21 @@
 #define HAVE_LOCALTIME_RZ 1
 #define HAVE_MKTIME_Z 1
 
+/* NexsOS1 provides the actual /etc/utmp disk record, written during
+ * environment bootstrap. Enable Gnulib's real binary file reader instead of
+ * the ENOSYS fallback; no host/systemd provider is being simulated. */
+#define HAVE_UTMP_H 1
+#define HAVE_UTMPX_H 0
+#define HAVE_STRUCT_UTMP_UT_NAME 0
+#define HAVE_STRUCT_UTMP_UT_TV 1
+#define HAVE_STRUCT_UTMP_UT_PID 1
+#define HAVE_STRUCT_UTMP_UT_TYPE 1
+#define HAVE_STRUCT_UTMP_UT_ID 1
+#define HAVE_STRUCT_UTMP_UT_HOST 1
+#define HAVE_STRUCT_UTMP_UT_SESSION 1
+#define HAVE_STRUCT_UTMP_UT_EXIT_E_TERMINATION 1
+#define HAVE_STRUCT_UTMP_UT_EXIT_E_EXIT 1
+
 #ifndef _NEXSOS_GETCWD_POSIX
 #define _NEXSOS_GETCWD_POSIX 1
 #endif

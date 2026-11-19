@@ -189,6 +189,10 @@ enum execsvc_launch_mode {
   EXECSVC_MODE_DETACHED = 1
 };
 int execsvc_launch_hosted(int argc, char *const argv[]);
+/* Trusted ROOT GUI launch with no argv or TTY hosting. The kernel still
+ * monotonically clamps the child's level and capability mask; USER callers
+ * cannot turn a /sys/bin pathname into an escalation. */
+int execsvc_launch_system_gui(const char *path);
 int execsvc_launch(int argc, char *argv[], enum execsvc_launch_mode mode,
                    const struct spawn_redir *redirs, int nredir,
                    char *resolved, size_t capacity);

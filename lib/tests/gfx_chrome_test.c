@@ -1,4 +1,4 @@
-#include <os1_gfx.h>
+#include <os1_libgraphics.h>
 
 #include <limits.h>
 #include <stdio.h>
@@ -59,7 +59,29 @@ static int test_scaled_rounded_frame_bounds(void) {
   return 0;
 }
 
+/* Two compositor instances must not accidentally share active theme state. */
+static int test_theme_instance_isolation(void) {
+  os1_theme_state_t first, second;
+  os1_theme_state_init(&first);
+  os1_theme_state_init(&second);
+  if (!os1_theme_style_active(&first) ||
+      !os1_theme_palette_active(&first) ||
+      !os1_theme_background_active(&first)) return 1;
+  if (os1_theme_set_style(&first, OS1_STYLE_GLASS) ||
+      os1_theme_set_palette(&first, OS1_THEME_LIGHT) ||
+      os1_theme_set_background(&first, OS1_BG_GREEN)) return 2;
+  if (first.style != OS1_STYLE_GLASS || first.palette != OS1_THEME_LIGHT ||
+      first.background != OS1_BG_GREEN || first.generation != 3U) return 3;
+  if (second.style != OS1_STYLE_MINIMAL || second.palette != OS1_THEME_DARK ||
+      second.background != OS1_BG_BLUE || second.generation != 0U) return 4;
+  if (os1_theme_set_style(&second, OS1_STYLE_COUNT) == 0 ||
+      os1_theme_set_palette(&second, OS1_THEME_COUNT) == 0 ||
+      os1_theme_set_background(&second, OS1_BG_COUNT) == 0) return 5;
+  return os1_theme_generation(&second) == 0U ? 0 : 6;
+}
+
 int main(void) {
+  CHECK(test_theme_instance_isolation() == 0);
   static const int expected_size[3] = {16, 14, 14};
   for (int shape = 0; shape < 3; ++shape) {
     for (int side = 0; side < 2; ++side) {

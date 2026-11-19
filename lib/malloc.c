@@ -183,7 +183,16 @@ static header_t *grow_heap(size_t min_total) {
 /* ---------------- malloc ---------------- */
 
 void *malloc(size_t size) {
-  if (size == 0)
+  /* ISO C permits either result for malloc(0), but our Gnulib consumers
+   * (xinmalloc(0, ...), xmalloc(0)) require a distinct freeable pointer.
+   * Allocate the minimum block rather than reporting spurious ENOMEM. */
+  if (size == 0U)
+    size = 1U;
+
+  /* Account for alignment, residue and both boundary tags before rounding:
+   * an overflow must fail rather than create an undersized writable block. */
+  if (size > SIZE_MAX - (MALLOC_ALIGN - 1U) - 8U -
+                          HEADER_SIZE - FOOTER_SIZE)
     return NULL;
 
   /* Round up to 16, then add an 8-byte residue so that

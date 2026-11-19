@@ -14,9 +14,9 @@ NXSDK_CORE_LIB_OBJECTS := \
   $(NXSDK_OBJECT_ROOT)/lib/posix_environment.o \
   $(NXSDK_OBJECT_ROOT)/lib/gfx/alpha.o \
   $(NXSDK_OBJECT_ROOT)/lib/gfx/raster.o \
-  $(NXSDK_OBJECT_ROOT)/lib/gfx/chrome.o \
-  $(NXSDK_OBJECT_ROOT)/lib/gfx/decoration.o \
-  $(NXSDK_OBJECT_ROOT)/lib/gfx/theme.o \
+  $(NXSDK_OBJECT_ROOT)/lib/extensions/LIBGRAPHICS/chrome.o \
+  $(NXSDK_OBJECT_ROOT)/lib/extensions/LIBGRAPHICS/decoration.o \
+  $(NXSDK_OBJECT_ROOT)/lib/extensions/LIBGRAPHICS/theme.o \
   $(NXSDK_OBJECT_ROOT)/lib/math.o \
   $(NXSDK_OBJECT_ROOT)/lib/font_lib.o \
   $(NXSDK_OBJECT_ROOT)/lib/extensions/USERKIT/nxntfy_srv/client.o \

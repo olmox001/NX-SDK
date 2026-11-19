@@ -312,25 +312,26 @@ static void draw_glyph_surface(struct os1_gfx_surface *surface,
                                struct font_ctx *ctx, int x, int y,
                                uint32_t codepoint, uint32_t color) {
   int idx = (int)codepoint - ctx->header.first_char;
-  if (idx < 0 || idx >= ctx->header.num_chars)
-    return;
-  struct font_glyph_info *gi = &ctx->glyphs[idx];
-  uint8_t *bitmap = ctx->bitmap + gi->data_offset;
+  if (idx < 0 || idx >= ctx->header.num_chars) return;
+  const struct font_glyph_info *gi = &ctx->glyphs[idx];
+  const uint8_t *bitmap = ctx->bitmap + gi->data_offset;
   int start_x = x + gi->x0;
   int start_y = y + ctx->header.ascent + gi->y0;
-  for (int gy = 0; gy < gi->height; gy++) {
-    int gx = 0;
-    while (gx < gi->width) {
-      while (gx < gi->width && bitmap[gy * gi->width + gx] <= 128)
-        gx++;
-      int span_start = gx;
-      while (gx < gi->width && bitmap[gy * gi->width + gx] > 128)
-        gx++;
-      if (gx > span_start) {
-        struct os1_gfx_rect span = {start_x + span_start, start_y + gy,
-                                    gx - span_start, 1};
-        os1_gfx_fill_rect(surface, &span, color);
-      }
+  /* The .off bitmap contains per-pixel alpha, not a 1-bit glyph mask.
+   * Thresholding at 128 discarded most strokes in the thin Rewir font. */
+  for (int gy = 0; gy < 256 && gy < gi->height; ++gy) {
+    int py = start_y + gy;
+    if (py < 0 || (size_t)py >= surface->height) continue;
+    for (int gx = 0; gx < 256 && gx < gi->width; ++gx) {
+      int px = start_x + gx;
+      if (px < 0 || (size_t)px >= surface->width) continue;
+      unsigned alpha = (color >> 24) *
+          bitmap[(size_t)gy * gi->width + (size_t)gx] / 255U;
+      if (alpha == 0U) continue;
+      uint32_t source = (color & 0x00ffffffU) | ((uint32_t)alpha << 24);
+      uint32_t *pixel = surface->pixels + (size_t)py * surface->stride +
+                        (size_t)px;
+      *pixel = os1_gfx_argb_over(source, *pixel);
     }
   }
 }

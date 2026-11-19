@@ -4783,7 +4783,18 @@ ssize_t readlink(const char *path, char *buf, size_t bufsiz) {
 }
 
 int openat(int dirfd, const char *pathname, int flags, ...) {
-  (void)dirfd;
+  if (pathname == NULL) {
+    errno = EFAULT;
+    return -1;
+  }
+  /* A relative open must be anchored to dirfd. The current native FS
+   * contract has no directory-relative acquisition; resolving against the
+   * process CWD would silently open a different object. Fail closed until
+   * the object provider supplies anchored resolution. */
+  if (dirfd != AT_FDCWD && pathname[0] != '/') {
+    errno = ENOTSUP;
+    return -1;
+  }
   return open(pathname, flags);
 }
 
@@ -4974,9 +4985,35 @@ pid_t getppid(void) {
 }
 
 int kill(pid_t pid, int sig) {
-  (void)pid;
-  (void)sig;
-  errno = EPERM;
+  if (pid <= 0) {
+    errno = EINVAL;
+    return -1;
+  }
+  /* POSIX kill(pid,0) tests a real process capability without sending any
+   * signal. GNU readutmp uses this to discard stale login sessions. */
+  if (sig == 0) {
+    char identity[16];
+    int written = snprintf(identity, sizeof(identity), "%d", (int)pid);
+    if (written <= 0 || written >= (int)sizeof(identity)) {
+      errno = EINVAL;
+      return -1;
+    }
+    long handle = OS1low_handle_create(OS1_NS_PROC, identity,
+                                        OS1_RIGHT_READ, OBJ_TYPE_PROCESS);
+    if (handle < 0) {
+      errno = handle == -ESRCH || handle == -ENOENT ? ESRCH : (int)-handle;
+      return -1;
+    }
+    long closed = OS1low_handle_close((int)handle);
+    if (closed < 0) {
+      errno = (int)-closed;
+      return -1;
+    }
+    return 0;
+  }
+  if (sig == SIGKILL)
+    return (int)errno_ret(OS1low_process_kill((int)pid));
+  errno = ENOTSUP;
   return -1;
 }
 

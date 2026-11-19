@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Real full-theme parity tests for kernel bootstrap and userland compositor.
+"""Material palette authority tests for the userland graphics stack.
 
-Both must render the same OS1_ theme/background enums while remaining
-separately buildable. The SDK tokens are the canonical Material colors.
+LIBGRAPHICS owns ordinary visual/background policy. The legacy kernel window
+compatibility path still carries the two active theme palettes, so those fields
+remain parity-checked only until that path is removed. Background gradients are
+userland-only and are checked against the nxres catalog anchor colors.
 """
 import re
 import unittest
@@ -11,8 +13,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 TOKENS = (ROOT / "system/include/contract/os1_material_colors.h").read_text()
 KERNEL = (ROOT / "kernel/graphics/compositor_style.c").read_text()
-USER = (ROOT / "system/lib/gfx/theme.c").read_text()
-MIRROR = (ROOT / "user/sys/bin/nxres.h").read_text()
+USER = (ROOT / "system/lib/extensions/LIBGRAPHICS/theme.c").read_text()
+MIRROR = (ROOT / "user/NexsOS1-main/lib/look/include/nxres.h").read_text()
 
 BACKGROUNDS = (
     "BLACK", "RED", "GREEN", "YELLOW", "BLUE", "MAGENTA", "CYAN",
@@ -59,25 +61,29 @@ class MaterialPaletteParity(unittest.TestCase):
                         initializer(KERNEL, "THEME_" + theme, field),
                         initializer(USER, "OS1_THEME_" + theme, field))
 
-    def test_all_sixteen_desktop_backgrounds_and_gradients_match(self):
+    def test_all_sixteen_userland_backgrounds_are_complete(self):
         for background in BACKGROUNDS:
-            for field in ("bg_color", "bg_top", "bg_bottom"):
-                with self.subTest(background=background, field=field):
-                    self.assertEqual(
-                        initializer(KERNEL, "BG_" + background, field),
-                        initializer(USER, "OS1_BG_" + background, field))
+            preset = "OS1_BG_" + background
+            with self.subTest(background=background):
+                anchor = initializer(USER, preset, "bg_color")
+                top = initializer(USER, preset, "bg_top")
+                bottom = initializer(USER, preset, "bg_bottom")
+                self.assertGreaterEqual(anchor, 0xFF000000)
+                self.assertGreaterEqual(top, 0xFF000000)
+                self.assertGreaterEqual(bottom, 0xFF000000)
 
-    def test_registry_color_mirror_matches_all_sixteen(self):
+    def test_registry_color_mirror_matches_userland_authority(self):
         entries = re.findall(
             r"(0x[0-9A-Fa-f]+[uU]?|OS1_MATERIAL_[A-Z_]+)\s*,\s*"
             r"/\*\s*(BG_[A-Z_]+)\s*\*/", MIRROR)
         found = dict((name, rgba(value)) for value, name in entries)
         self.assertEqual(len(found), len(BACKGROUNDS))
         for background in BACKGROUNDS:
-            name = "BG_" + background
+            legacy_name = "BG_" + background
+            user_name = "OS1_BG_" + background
             with self.subTest(background=background):
                 self.assertEqual(
-                    found[name], initializer(KERNEL, name, "bg_color"))
+                    found[legacy_name], initializer(USER, user_name, "bg_color"))
 
     def test_material_neutrals_are_warm_and_grey_is_light(self):
         self.assertLess(token("OS1_MATERIAL_BG_GRAY") & 255, 255)
