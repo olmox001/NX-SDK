@@ -431,12 +431,6 @@ _sys_display_present:
     syscall
     ret
 
-.global _sys_input_raw_read
-_sys_input_raw_read:
-    movq $SYS_INPUT_RAW_READ, %rax
-    syscall
-    ret
-
 .global _sys_window_move
 _sys_window_move:
     movq $SYS_WINDOW_MOVE, %rax

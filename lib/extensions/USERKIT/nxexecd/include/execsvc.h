@@ -188,6 +188,8 @@ enum execsvc_launch_mode {
   EXECSVC_MODE_FOREGROUND = 0,
   EXECSVC_MODE_DETACHED = 1
 };
+/* Zero for the host's direct job, positive when a new terminal was launched. */
+int execsvc_open_terminal(const char *program);
 int execsvc_launch_hosted(int argc, char *const argv[]);
 /* Trusted ROOT GUI launch with no argv or TTY hosting. The kernel still
  * monotonically clamps the child's level and capability mask; USER callers

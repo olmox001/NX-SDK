@@ -45,8 +45,9 @@ enum {
 
 /* NAME requests carry one NUL-terminated canonical service name.
  * AUTH follows NAME and precedes REGISTER; it carries the service capability
- * mask selected by the protected manifest (CAP_ALL or CAP_ALL plus the
- * optional CAP_WINDOW_MANAGE). Only the authenticated init may set it.
+ * mask selected by the protected manifest (any bounded subset of CAP_ALL
+ * plus CAP_WINDOW_MANAGE, including zero for a port-only service).
+ * No omitted field means CAP_ALL. Only authenticated init may set it.
  * The request's payload is a sequence of three terminated strings:
  * registered system image identity, blank-separated bounded arguments (0-2),
  * optional srv.* registry key. Data1=slot, data2=mode.

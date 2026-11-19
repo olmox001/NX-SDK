@@ -18,6 +18,7 @@
  * (ctty handback), and until then interactive jobs keep the in-process path.
  */
 #include <execsvc.h>
+#include <os1_tty.h>
 #include <os1.h>
 #include <string.h>
 #include <unistd.h>
@@ -296,7 +297,9 @@ int execsvc_strip_redirections(int *pargc, char *argv[],
     *nredir = 0;
     return status;
   }
-  argv[out] = NULL;
+  /* The input contract supplies argc slots. A compacted vector has room
+   * for a terminator in the removed tail, even at the argument limit. */
+  if (out < argc) argv[out] = NULL;
   *pargc = out;
   return 0;
 }
@@ -410,6 +413,24 @@ int execsvc_launch_hosted(int argc, char *const argv[]) {
   }
   return execsvc_launch_explicit("/sys/bin/nxexec", argc + 1, full,
                                 SPAWN_FLAG_DETACHED, NULL, 0);
+}
+
+/* A directly hosted interactive program already has a session. A descendant
+ * inherits its output port for commands, but opening another interactive
+ * terminal starts a fresh host. This test selects presentation only; FAMILY
+ * port acquisition still enforces the actual writer authority. */
+int execsvc_open_terminal(const char *program) {
+  char port[64], parent_port[64];
+  if (!program || !program[0]) return -EINVAL;
+  int parent = getppid();
+  if (parent < 0) return -errno;
+  int size = snprintf(parent_port, sizeof(parent_port), "%s%d",
+                      OS1_TTY_PORT_PREFIX, parent);
+  if (size <= 0 || (size_t)size >= sizeof(parent_port)) return -EOVERFLOW;
+  if (OS1_env_get(OS1_TTY_ENV, port, sizeof(port)) == 0 &&
+      strcmp(port, parent_port) == 0) return 0;
+  char *job[] = {(char *)program};
+  return execsvc_launch_hosted(1, job);
 }
 
 int execsvc_launch(int argc, char *argv[], enum execsvc_launch_mode mode,
