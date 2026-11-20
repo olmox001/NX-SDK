@@ -21,6 +21,25 @@ static int test_it_preserves_accent(void) {
   if (os1_keyboard_layout_utf8(NXS_KBD_MAC19ITA,39U,1) != NULL) return 4;
   return 0;
 }
+/* Italian Mac layout: the physical Shift+2 key must yield a quote so
+ * terminal programs can type normal string literals without selecting US.
+ * The existing accented physical keys remain UTF-8, not ASCII substitutions.
+ */
+static int test_it_shift_two_quotes(void) {
+  struct os1_keyboard_state state = {0};
+  struct os1_keyboard_key key;
+  if (os1_keyboard_translate(&state, 42U, 1, NXS_KBD_MAC19ITA, &key) != 0)
+    return 1;
+  if (os1_keyboard_translate(&state, 3U, 1, NXS_KBD_MAC19ITA, &key) != 1 ||
+      key.key != (unsigned char)'"' || key.utf8[0] != '"' ||
+      key.utf8[1] != '\0') return 2;
+  if (os1_keyboard_translate(&state, 42U, 0, NXS_KBD_MAC19ITA, &key) != 0)
+    return 3;
+  if (os1_keyboard_translate(&state, 3U, 1, NXS_KBD_MAC19ITA, &key) != 1 ||
+      key.utf8[0] != '2') return 4;
+  return 0;
+}
+
 static int test_unknown_layout_fails_closed(void) {
   if (os1_keyboard_layout_id("spoofed") != 0) return 1;
   if (os1_keyboard_layout_id(NULL) != NXS_KBD_MAC19ITA) return 2;
@@ -52,8 +71,9 @@ int main(void) {
   int a=test_us_is_unmodified(),b=test_it_preserves_accent();
   int c=test_unknown_layout_fails_closed();
   int d = test_modifier_pairs_and_repeat();
-  if (a || b || c || d) {
-    int written=printf("keyboard layout tests failed: %d %d %d %d\n",a,b,c,d);
+  int e = test_it_shift_two_quotes();
+  if (a || b || c || d || e) {
+    int written=printf("keyboard layout tests failed: %d %d %d %d %d\n",a,b,c,d,e);
     return written > 0 ? 1 : 2;
   }
   return 0;

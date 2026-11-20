@@ -17,6 +17,9 @@ int os1_keyboard_layout_id(const char *name) {
 const char *os1_keyboard_layout_utf8(int layout, unsigned code,
                                            int shift) {
   if (layout != NXS_KBD_MAC19ITA) return NULL;
+  /* Italian Mac physical Shift+2 is a double quote, not US Shift+2 '@'.
+   * Preserve existing accented key positions including Shift+apostrophe. */
+  if (code == 3U && shift) return "\"";
   if (code == 40U) return shift ? "\xC3\x80" : "\xC3\xA0";
   if (code == 26U) return shift ? "\xC3\xA9" : "\xC3\xA8";
   if (code == 39U && !shift) return "\xC3\xB2";
@@ -89,6 +92,9 @@ int os1_keyboard_translate(struct os1_keyboard_state *state, unsigned code,
     if (utf8 != NULL) {
       out->utf8[0] = utf8[0];
       out->utf8[1] = utf8[1];
+      /* ASCII overrides must agree in both legacy key and UTF-8 channels:
+       * NXShell consumes .key; stdin programs consume .utf8. */
+      if (utf8[1] == '\0') out->key = (unsigned char)utf8[0];
     }
   }
   return 1;
