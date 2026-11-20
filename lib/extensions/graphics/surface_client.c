@@ -40,6 +40,33 @@ long OS1_display_mode_set(uint32_t index, uint64_t generation) {
   return OS1_object_write(handle, &mode, sizeof(mode));
 }
 
+long OS1_display_workspace_query(struct os1_display_workspace_v1 *workspace) {
+  static int handle = -1;
+  if (workspace == NULL) return -EINVAL;
+  int result = resource_open_cached(&handle, OS1_RESOURCE_DISPLAY_WORKSPACE,
+                                    OS1_RIGHT_READ);
+  if (result != 0) return result;
+  long got = OS1_object_read(handle, workspace, sizeof(*workspace));
+  if (got < 0) return got;
+  return got == (long)sizeof(*workspace) ? 0 : -EIO;
+}
+
+long OS1_display_workspace_set(uint32_t mode, uint32_t width,
+                               uint32_t height, uint32_t zoom_percent) {
+  static int handle = -1;
+  int result = resource_open_cached(&handle, OS1_RESOURCE_DISPLAY_WORKSPACE,
+                                    OS1_RIGHT_WRITE);
+  if (result != 0) return result;
+  struct os1_display_workspace_v1 workspace = {
+      .abi_version = OS1_SURFACE_ABI_VERSION,
+      .struct_size = sizeof(workspace),
+      .mode = mode, .zoom_percent = zoom_percent,
+      .base_width = width, .base_height = height};
+  long wrote = OS1_object_write(handle, &workspace, sizeof(workspace));
+  if (wrote < 0) return wrote;
+  return wrote == (long)sizeof(workspace) ? 0 : -EIO;
+}
+
 long OS1_surface_snapshot(struct os1_window_snapshot_v1 *snapshot) {
   static int handle = -1;
   int result = resource_open_cached(&handle, OS1_RESOURCE_WINDOW_STORAGE, OS1_RIGHT_READ);
@@ -54,6 +81,39 @@ long OS1_surface_move(int id, int x, int y) {
   struct os1_surface_move_v1 request = {OS1_SURFACE_ABI_VERSION,
       sizeof(request), id, x, y};
   return OS1_object_write(handle, &request, sizeof(request));
+}
+
+long OS1_surface_layout_apply(int window_id, unsigned anchor, unsigned layer,
+                              unsigned order, unsigned margin,
+                              unsigned reserved, unsigned width,
+                              unsigned height) {
+  static int handle = -1;
+  int status = resource_open_cached(&handle, OS1_RESOURCE_SURFACE_LAYOUT,
+                                     OS1_RIGHT_WRITE);
+  if (status != 0) return status;
+  struct os1_surface_layout_v1 layout = {
+      .abi_version = OS1_SURFACE_ABI_VERSION, .struct_size = sizeof(layout),
+      .window_id = window_id, .anchor = anchor, .layer = layer,
+      .order = order, .margin = margin, .reserved = reserved,
+      .width = width, .height = height};
+  long written = OS1_object_write(handle, &layout, sizeof(layout));
+  if (written < 0) return written;
+  return written == (long)sizeof(layout) ? 0 : -EIO;
+}
+
+long OS1_surface_layout_query(int window_id,
+                              struct os1_surface_layout_v1 *layout) {
+  static int handle = -1;
+  if (layout == NULL) return -EINVAL;
+  int status = resource_open_cached(&handle, OS1_RESOURCE_SURFACE_LAYOUT,
+                                     OS1_RIGHT_READ);
+  if (status != 0) return status;
+  *layout = (struct os1_surface_layout_v1){
+      .abi_version = OS1_SURFACE_ABI_VERSION, .struct_size = sizeof(*layout),
+      .window_id = window_id};
+  long read = OS1_object_read(handle, layout, sizeof(*layout));
+  if (read < 0) return read;
+  return read == (long)sizeof(*layout) ? 0 : -EIO;
 }
 
 long OS1_input_resource_read(struct os1_raw_input_event_v1 *event,

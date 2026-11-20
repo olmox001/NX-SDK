@@ -2,21 +2,22 @@
   "schema": 1,
   "scopes": {
     "abi": {
-      "revision": 4,
+      "revision": 12,
       "paths": [
         "include/contract"
       ],
       "snapshot": "contracts/abi-snapshot.sha256"
     },
     "api": {
-      "revision": 6,
+      "revision": 11,
       "paths": [
-        "include/api"
+        "include/api",
+        "lib/extensions/LIBGRAPHICS/include"
       ],
       "snapshot": "contracts/api-snapshot.sha256"
     },
     "userkit": {
-      "revision": 2,
+      "revision": 4,
       "paths": [
         "lib/extensions/USERKIT"
       ],

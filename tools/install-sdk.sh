@@ -64,6 +64,7 @@ install_headers() {
     cp -R "$src" "$dst"
   done <<'HDRS'
 lib/extensions/input/include
+lib/extensions/LIBGRAPHICS/include
 lib/extensions/USERKIT/manager/include
 lib/extensions/USERKIT/nxexecd/include
 lib/extensions/USERKIT/nxntfy_srv/include
@@ -80,7 +81,7 @@ HDRS
   cp "$SDK_ROOT/lib/extensions/USERKIT/README.md" "$DEST/lib/extensions/USERKIT/"
   while IFS= read -r project; do
     [ -n "$project" ] || continue
-    mkdir -p "$DEST/lib/extensions/USERKIT/$(dirname "$project")"
+    mkdir -p "$DEST/lib/extensions/USERKIT/$project"
     cp "$SDK_ROOT/lib/extensions/USERKIT/$project/project.mk"        "$DEST/lib/extensions/USERKIT/$project/project.mk"
   done <<'PROJECTS'
 manager

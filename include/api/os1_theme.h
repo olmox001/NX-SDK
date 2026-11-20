@@ -27,13 +27,21 @@ enum { OS1_BG_BLACK, OS1_BG_RED, OS1_BG_GREEN, OS1_BG_YELLOW, OS1_BG_BLUE,
        OS1_BG_BRIGHT_BLUE, OS1_BG_BRIGHT_MAGENTA, OS1_BG_BRIGHT_CYAN,
        OS1_BG_BRIGHT_WHITE };
 
-const os1_compositor_style_t *os1_theme_style_active(void);
-const os1_compositor_theme_t *os1_theme_palette_active(void);
-const os1_compositor_background_t *os1_theme_background_active(void);
-int os1_theme_titlebar_height(void);
-int os1_theme_set_style(int style_id);
-int os1_theme_set_palette(int theme_id);
-int os1_theme_set_background(int background_id);
-uint32_t os1_theme_generation(void);
+/* Each compositor owns its theme selection. Presets remain immutable SDK data.
+ * No process-wide mutable theme state or cross-process global ownership. */
+typedef struct os1_theme_state {
+  int style, palette, background;
+  uint32_t generation;
+} os1_theme_state_t;
+
+void os1_theme_state_init(os1_theme_state_t *state);
+const os1_compositor_style_t *os1_theme_style_active(const os1_theme_state_t *state);
+const os1_compositor_theme_t *os1_theme_palette_active(const os1_theme_state_t *state);
+const os1_compositor_background_t *os1_theme_background_active(const os1_theme_state_t *state);
+int os1_theme_titlebar_height(const os1_theme_state_t *state);
+int os1_theme_set_style(os1_theme_state_t *state, int style_id);
+int os1_theme_set_palette(os1_theme_state_t *state, int theme_id);
+int os1_theme_set_background(os1_theme_state_t *state, int background_id);
+uint32_t os1_theme_generation(const os1_theme_state_t *state);
 
 #endif

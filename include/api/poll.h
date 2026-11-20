@@ -4,10 +4,11 @@
 /*
  * Minimal POSIX <poll.h> for the OS1 userspace libc.
  *
- * OS1 has no pollable fd set; IPC is checked with try_recv() (os1.h). poll()
- * (lib.c) returns 0 (timeout, no fd ready), matching base-nexs's own
- * baremetal libc behaviour, so non-blocking poll(...,0) callers fall through
- * to their try_recv path. Implemented in the libc layer, NOT as an OS1 syscall.
+ * poll() checks real per-process capability handles. PIPE readiness and EOF
+ * use a lock-consistent object control query; FILE handles are immediately
+ * ready for authorized operations. The CONSOLE input queue and non-fd service
+ * object kinds explicitly return ENOTSUP until a readiness provider exists.
+ * No new syscall or host-libc fallback is involved.
  */
 
 typedef unsigned long nfds_t;

@@ -8,6 +8,7 @@
 
 #include <os1.h>
 #include <errno.h>
+#include <stdbool.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <dirent.h>
@@ -19,6 +20,9 @@ extern "C" {
 /* System constants for NexsOS1 userland */
 #define NEXSOS_PAGE_SIZE 4096
 #define NEXSOS_MAX_FD    64
+
+/* Gnulib's openat portability declaration reflects the native VFS seam. */
+bool openat_needs_fchdir(void);
 
 /* Bridge utilities */
 int  gnulib_os1_getpagesize(void);

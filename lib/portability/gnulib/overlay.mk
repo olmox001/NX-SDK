@@ -78,7 +78,10 @@ GNULIB_OVERLAY_SRCS := \
   $(GNULIB_DIR)/lib/save-cwd.c \
   $(GNULIB_DIR)/lib/openat-proc.c \
   $(GNULIB_DIR)/lib/openat-die.c \
-  $(GNULIB_PORT_DIR)/fts_stub.c \
+  $(GNULIB_DIR)/lib/opendirat.c \
+  $(GNULIB_DIR)/lib/cycle-check.c \
+  $(GNULIB_DIR)/lib/i-ring.c \
+  $(GNULIB_DIR)/lib/fts.c \
   $(GNULIB_DIR)/lib/btoc32.c \
   $(GNULIB_DIR)/lib/c32width.c \
   $(GNULIB_DIR)/lib/c32_get_type_test.c \

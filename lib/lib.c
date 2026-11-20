@@ -326,24 +326,16 @@ int nanosleep(const struct timespec *req, struct timespec *rem) {
  * defined further down, next to their original neighbours).  exit keeps the
  * while(1): unreachable dead code that silences the "noreturn" warning in
  * compilers that do not see svc #0 as a terminator. */
-/* Forward declaration: every spawn primitive below propagates
- * the caller's environment into the child's per-process registry
- * namespace before returning the pid — see __env_propagate_to_child,
- * defined further down with the rest of the OS1_env_* surface. */
-static void __env_propagate_to_child(long child_pid);
-
+/* The kernel snapshots the caller's environment before publishing the child.
+ * Writing it a second time after spawn could overwrite a new TTY binding. */
 long OS1low_process_spawn(const char *path, int argc, char *const argv[]) {
-  long pid = _sys_spawn(path, argc, argv, 0);
-  __env_propagate_to_child(pid);
-  return pid;
+  return _sys_spawn(path, argc, argv, 0);
 }
 /* Detached (SPAWN_FLAG_DETACHED, #193): the child does NOT inherit the spawner
  * as ctty — the nxexec launcher-mode.  See caps.h for the flag semantics. */
 long OS1low_process_spawn_detached(const char *path, int argc,
                                    char *const argv[]) {
-  long pid = _sys_spawn(path, argc, argv, SPAWN_FLAG_DETACHED);
-  __env_propagate_to_child(pid);
-  return pid;
+  return _sys_spawn(path, argc, argv, SPAWN_FLAG_DETACHED);
 }
 /* Phase 4: spawn with fd redirection (shell `<`/`>`/`>>`/`2>`).  The redirect
  * targets must already be open in THIS process; the kernel dups them into the
@@ -351,18 +343,15 @@ long OS1low_process_spawn_detached(const char *path, int argc,
 long OS1low_process_spawn_redir(const char *path, int argc, char *const argv[],
                                 unsigned int flags,
                                 const struct spawn_redir *redir, int nredir) {
-  long pid = (nredir <= 0)
+  return (nredir <= 0)
                  ? _sys_spawn(path, argc, argv, flags)
                  : _sys_spawn_redir(path, argc, argv, flags, redir, nredir);
-  __env_propagate_to_child(pid);
-  return pid;
 }
 long OS1low_process_spawn_caps(const char *path, int level,
                                unsigned long caps) {
-  long pid = _sys_spawn_caps(path, level, caps, 0);
-  __env_propagate_to_child(pid);
-  return pid;
+  return _sys_spawn_caps(path, level, caps, 0);
 }
+
 /* OS1low_pipe (Phase 4): anonymous byte pipe (OBJ_TYPE_PIPE).  fds[0]=read end,
  * fds[1]=write end.  The kernel installs both handles; read/write/close operate
  * on them like any other fd. */
@@ -1380,8 +1369,22 @@ static int open_check_nonblock(int fd, int flags) {
 }
 
 int open(const char *pathname, int flags, ...) {
+  if (pathname == NULL) return (int)errno_ret_ctx(-EFAULT, pathname);
   if ((flags & O_ACCMODE) == O_ACCMODE)
     return (int)errno_ret_ctx(-EINVAL, pathname);
+  /* Unix /dev/null is a typed NULL object; routing it through ext4 would
+   * fabricate a file with incorrect sink/EOF behavior. Acquire the actual
+   * provider using the SAME handle namespace as other SDK resources. */
+  if (strcmp(pathname, "/dev/null") == 0) {
+    if ((flags & ~(O_ACCMODE | O_NONBLOCK)) != 0)
+      return (int)errno_ret_ctx(-ENOTSUP, pathname);
+    uint32_t rights = OS1_RIGHT_DUPLICATE;
+    if ((flags & O_ACCMODE) != O_WRONLY) rights |= OS1_RIGHT_READ;
+    if ((flags & O_ACCMODE) != O_RDONLY) rights |= OS1_RIGHT_WRITE;
+    long handle = OS1low_handle_create(OS1_NS_RESOURCE, OS1_RESOURCE_NULL,
+                                       rights, OBJ_TYPE_RESOURCE);
+    return handle < 0 ? (int)errno_ret_ctx(handle, pathname) : (int)handle;
+  }
   int fd = (int)_sys_open(pathname, flags & ~O_NONBLOCK);
   if (fd >= 0) fd = open_check_nonblock(fd, flags);
   if (fd < 0) {
@@ -2878,58 +2881,6 @@ int env_names(char *names[], int max) {
 }
 
 /*
- * __env_propagate_to_child - copies every variable that THIS process has
- * set (its own branch sys.proc.<self>.env.* — the machine defaults
- * under sys.env.* don't need copying, the child inherits them anyway
- * via the fallback of OS1_env_get) into the branch of the child just spawned.
- *
- * Without this every child starts with an EMPTY environment: nothing in
- * this tree wrote it, so an `export PATH=...` (or any setenv())
- * in a shell was invisible to everything it launched, and `printenv PATH`
- * in a child always failed even with the parent's PATH set.
- * execsvc_client.c already carries the cwd of the requester through the
- * service protocol for exactly the same reason ("cwd is wrong for exactly
- * the same reason the environment is"); this is the same correction applied
- * to the direct spawn path, the one that nxexec_spawn_search_redir/
- * nxshell use for every foreground and background command.
- *
- * Best-effort: a write failure here doesn't fail the spawn (the child starts
- * anyway, just without that variable) — consistent with setenv() which is
- * also a best-effort registry write.
- *
- * NOTE: the execsvc path (Phase 9c) is NOT covered here — a spawn routed
- * via /sys/bin/nxexec happens IN THE SERVICE PROCESS, so "self" in the
- * point where __env_propagate_to_child would run is the service, not the
- * requester. Fixing it requires bringing the environment into the network
- * protocol like already happens for the cwd (bump of EXECSVC_VERSION) —
- * left as a follow-on, in line with the note Phase 9d of the header on
- * cwd/ctty/env that must arrive together "as ONE mechanism".
- */
-static void __env_propagate_to_child(long child_pid) {
-  if (child_pid <= 0)
-    return;
-  char buf[512];
-  if (OS1_env_enum(buf, sizeof(buf)) <= 0)
-    return;
-  char *save = NULL;
-  for (char *name = strtok_r(buf, "\n", &save); name;
-       name = strtok_r(NULL, "\n", &save)) {
-    char val[GETENV_VALMAX];
-    if (OS1_env_get(name, val, sizeof(val)) != 0)
-      continue;
-    char key[OS1_ENV_KEYMAX];
-    int klen =
-        snprintf(key, sizeof(key), "sys.proc.%ld.env.%s", child_pid, name);
-    if (klen <= 0 || (size_t)klen >= sizeof(key)) /* R7: truncation check */
-      continue;
-    /* R7: best-effort by design (see the function comment above) — a single
-     * variable failing to propagate must not abort the spawn, so the result
-     * is intentionally discarded here, not merely unchecked. */
-    (void)OS1_registry_set(key, val);
-  }
-}
-
-/*
  * stat - path metadata in ONE syscall (SYS_STAT).
  *
  * It used to infer the type: "list_dir succeeds ONLY on directories, so a >= 0
@@ -3996,13 +3947,76 @@ int tcsetattr(int fd, int optional_actions, const struct termios *termios_p) {
   return 0;
 }
 
-/* --- <poll.h> --- no pollable fd set; report a clean timeout (0 ready). */
+/* Query the real PIPE object, not a fabricated no-events result.
+ * File descriptors are always ready for operations their handles authorize.
+ * Unsupported live kinds fail explicitly rather than implying timeout.
+ * The bounded quantum sleeps without consuming data or changing handles. */
+#define OS1_POLL_MAX_FDS 32U
+#define OS1_POLL_QUANTUM_MS 10U
+static int os1_poll_one(struct pollfd *item) {
+  item->revents = 0;
+  if (item->fd < 0) return 0;
+  long query = OS1low_cap_query(item->fd);
+  if (query < 0) { item->revents = POLLNVAL; return 1; }
+  unsigned int type = (unsigned int)OS1_CAPQ_TYPE(query);
+  unsigned int rights = (unsigned int)OS1_CAPQ_RIGHTS(query);
+  if (type == OBJ_TYPE_PIPE) {
+    struct os1_pipe_status_v1 state = {
+        .abi_version = OS1_PIPE_STATUS_VERSION, .struct_size = sizeof(state)
+    };
+    long rc = OS1_object_ctl(item->fd, OBJ_CTL_PIPE_STATUS,
+                             (long)(uintptr_t)&state);
+    if (rc != 0) return (int)rc;
+    if ((item->events & POLLIN) != 0 &&
+        (rights & OS1_RIGHT_READ) != 0 &&
+        (state.available > 0U || state.writers == 0U))
+      item->revents |= POLLIN;
+    if ((rights & OS1_RIGHT_READ) != 0 && state.writers == 0U)
+      item->revents |= POLLHUP;
+    if ((item->events & POLLOUT) != 0 &&
+        (rights & OS1_RIGHT_WRITE) != 0 &&
+        state.readers != 0U && state.available < state.capacity)
+      item->revents |= POLLOUT;
+    if ((rights & OS1_RIGHT_WRITE) != 0 && state.readers == 0U)
+      item->revents |= POLLERR;
+  } else if (type == OBJ_TYPE_FILE || type == OBJ_TYPE_CONSOLE) {
+    if ((item->events & POLLIN) != 0 && type == OBJ_TYPE_CONSOLE)
+      return -ENOTSUP; /* no queryable input queue yet */
+    if ((item->events & POLLIN) != 0 && (rights & OS1_RIGHT_READ) != 0)
+      item->revents |= POLLIN;
+    if ((item->events & POLLOUT) != 0 && (rights & OS1_RIGHT_WRITE) != 0)
+      item->revents |= POLLOUT;
+  } else {
+    return -ENOTSUP;
+  }
+  return item->revents != 0 ? 1 : 0;
+}
+
+static int os1_poll_scan(struct pollfd *fds, nfds_t count) {
+  int ready = 0;
+  for (nfds_t i = 0; i < OS1_POLL_MAX_FDS && i < count; ++i) {
+    int result = os1_poll_one(&fds[i]);
+    if (result < 0) return result;
+    ready += result;
+  }
+  return ready;
+}
+
 int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
-  (void)timeout;
-  if (fds)
-    for (nfds_t i = 0; i < nfds; i++)
-      fds[i].revents = 0;
-  return 0;
+  if ((fds == NULL && nfds != 0U) || nfds > OS1_POLL_MAX_FDS ||
+      timeout < -1) { errno = EINVAL; return -1; }
+  uint64_t start = os1_mono_ns();
+  for (uint32_t iteration = 0U; iteration < UINT32_MAX; ++iteration) {
+    int ready = os1_poll_scan(fds, nfds);
+    if (ready < 0) { errno = -ready; return -1; }
+    if (ready > 0 || timeout == 0) return ready;
+    if (timeout > 0 &&
+        (os1_mono_ns() - start) / UINT64_C(1000000) >=
+            (uint64_t)timeout) return 0;
+    OS1_sleep((int)OS1_POLL_QUANTUM_MS);
+  }
+  errno = ETIMEDOUT;
+  return -1;
 }
 
 /* --- <signal.h> --- OS1 has no signal delivery; the libc accepts handlers and
@@ -4609,10 +4623,24 @@ char *stpcpy(char *dest, const char *src) {
 
 #include <fcntl.h>
 
+/* An FD operation must have effect on the REAL object table. F_DUPFD is a
+ * minimum-slot capability duplication, not the previous fake success.
+ * State-changing flags require a kernel-backed shared-description model
+ * before they can be accepted, so all unsupported operations fail closed. */
 int fcntl(int fd, int cmd, ...) {
-  (void)fd;
-  (void)cmd;
-  return 0;
+  long query = OS1low_cap_query(fd);
+  if (query < 0) { errno = (int)-query; return -1; }
+  if (cmd == F_DUPFD) {
+    va_list args;
+    va_start(args, cmd);
+    int minimum = va_arg(args, int);
+    va_end(args);
+    long result = OS1_object_ctl(fd, OBJ_CTL_DUP_MIN, minimum);
+    if (result < 0) { errno = (int)-result; return -1; }
+    return (int)result;
+  }
+  errno = ENOTSUP;
+  return -1;
 }
 
 ssize_t copy_file_range(int fd_in, off_t *off_in, int fd_out, off_t *off_out,
@@ -4729,25 +4757,31 @@ pid_t fork(void) {
   return -1;
 }
 
+/* No user/group inode mutation contract exists yet. Reporting success
+ * would defeat account isolation and GNU security-sensitive callers.
+ * Fail closed until the VFS object owner provider is implemented. */
 int chown(const char *path, uid_t owner, gid_t group) {
   (void)path;
   (void)owner;
   (void)group;
-  return 0;
+  errno = ENOTSUP;
+  return -1;
 }
 
 int lchown(const char *path, uid_t owner, gid_t group) {
   (void)path;
   (void)owner;
   (void)group;
-  return 0;
+  errno = ENOTSUP;
+  return -1;
 }
 
 int fchown(int fd, uid_t owner, gid_t group) {
   (void)fd;
   (void)owner;
   (void)group;
-  return 0;
+  errno = ENOTSUP;
+  return -1;
 }
 
 int chownat(int dirfd, const char *pathname, uid_t owner, gid_t group) {
@@ -4783,7 +4817,18 @@ ssize_t readlink(const char *path, char *buf, size_t bufsiz) {
 }
 
 int openat(int dirfd, const char *pathname, int flags, ...) {
-  (void)dirfd;
+  if (pathname == NULL) {
+    errno = EFAULT;
+    return -1;
+  }
+  /* A relative open must be anchored to dirfd. The current native FS
+   * contract has no directory-relative acquisition; resolving against the
+   * process CWD would silently open a different object. Fail closed until
+   * the object provider supplies anchored resolution. */
+  if (dirfd != AT_FDCWD && pathname[0] != '/') {
+    errno = ENOTSUP;
+    return -1;
+  }
   return open(pathname, flags);
 }
 
@@ -4897,20 +4942,23 @@ char *nl_langinfo(nl_item item) {
   return buf;
 }
 
+/* POSIX FD aliases are real handles sharing the same kernel kobject/offset.
+ * Duplication is permitted only if source authority grants DUPLICATE. */
 int dup(int oldfd) {
-  if (oldfd < 0) {
-    errno = EBADF;
-    return -1;
-  }
-  return oldfd;
+  long query = OS1low_cap_query(oldfd);
+  if (query < 0) { errno = (int)-query; return -1; }
+  long result = OS1low_handle_duplicate(oldfd,
+      (unsigned int)OS1_CAPQ_RIGHTS(query));
+  if (result < 0) { errno = (int)-result; return -1; }
+  return (int)result;
 }
 
+/* Atomic destination replacement: closing newfd first and then duplicating
+ * is a capability race and does not ensure the requested descriptor number. */
 int dup2(int oldfd, int newfd) {
-  if (oldfd < 0 || newfd < 0) {
-    errno = EBADF;
-    return -1;
-  }
-  return newfd;
+  long result = OS1_object_ctl(oldfd, OBJ_CTL_DUP_TO, (long)newfd);
+  if (result < 0) { errno = (int)-result; return -1; }
+  return (int)result;
 }
 
 int access(const char *pathname, int mode) {
@@ -4974,44 +5022,79 @@ pid_t getppid(void) {
 }
 
 int kill(pid_t pid, int sig) {
-  (void)pid;
-  (void)sig;
-  errno = EPERM;
+  if (pid <= 0) {
+    errno = EINVAL;
+    return -1;
+  }
+  /* POSIX kill(pid,0) tests a real process capability without sending any
+   * signal. GNU readutmp uses this to discard stale login sessions. */
+  if (sig == 0) {
+    char identity[16];
+    int written = snprintf(identity, sizeof(identity), "%d", (int)pid);
+    if (written <= 0 || written >= (int)sizeof(identity)) {
+      errno = EINVAL;
+      return -1;
+    }
+    long handle = OS1low_handle_create(OS1_NS_PROC, identity,
+                                        OS1_RIGHT_READ, OBJ_TYPE_PROCESS);
+    if (handle < 0) {
+      errno = handle == -ESRCH || handle == -ENOENT ? ESRCH : (int)-handle;
+      return -1;
+    }
+    long closed = OS1low_handle_close((int)handle);
+    if (closed < 0) {
+      errno = (int)-closed;
+      return -1;
+    }
+    return 0;
+  }
+  if (sig == SIGKILL)
+    return (int)errno_ret(OS1low_process_kill((int)pid));
+  errno = ENOTSUP;
   return -1;
 }
 
+/* A privilege level is not a real Unix principal. These operations
+ * cannot claim success without a kernel-verified UID/GID credential
+ * transition. No silent root impersonation or dropped group membership. */
 int setuid(uid_t uid) {
   (void)uid;
-  return 0;
+  errno = ENOTSUP;
+  return -1;
 }
 int seteuid(uid_t uid) {
   (void)uid;
-  return 0;
+  errno = ENOTSUP;
+  return -1;
 }
 int setgid(gid_t gid) {
   (void)gid;
-  return 0;
+  errno = ENOTSUP;
+  return -1;
 }
 int setegid(gid_t gid) {
   (void)gid;
-  return 0;
+  errno = ENOTSUP;
+  return -1;
 }
 
 int setreuid(uid_t ruid, uid_t euid) {
   (void)ruid;
   (void)euid;
-  return 0;
+  errno = ENOTSUP;
+  return -1;
 }
 int setregid(gid_t rgid, gid_t egid) {
   (void)rgid;
   (void)egid;
-  return 0;
+  errno = ENOTSUP;
+  return -1;
 }
 
 int getgroups(int size, gid_t list[]) {
-  if (size >= 1)
-    list[0] = 0;
-  return 1;
+  (void)list;
+  errno = size < 0 ? EINVAL : ENOTSUP;
+  return -1;
 }
 
 /* ── Terminal / tty stubs ───────────────────────────────────────────── */

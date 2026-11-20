@@ -7,7 +7,11 @@ import argparse
 import re
 from pathlib import Path
 
-PUBLIC_DIRS = ("include/api", "include/contract")
+PUBLIC_DIRS = (
+    "include/api",
+    "include/contract",
+    "lib/extensions/LIBGRAPHICS/include",
+)
 FORBIDDEN_PREFIXES = (
     "kernel/",
     "HAL/",

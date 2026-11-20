@@ -451,12 +451,6 @@ _sys_display_present:
     svc #0
     ret
 
-.global _sys_input_raw_read
-_sys_input_raw_read:
-    mov x8, #SYS_INPUT_RAW_READ
-    svc #0
-    ret
-
 .global _sys_window_move
 _sys_window_move:
     mov x8, #SYS_WINDOW_MOVE

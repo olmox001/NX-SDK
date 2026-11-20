@@ -12,6 +12,7 @@
  */
 
 #include <stddef.h>
+#include <sys/types.h>
 
 #ifndef _SIG_ATOMIC_T
 #define _SIG_ATOMIC_T
@@ -76,6 +77,9 @@ int sigaction(int signum, const struct sigaction *restrict act,
               struct sigaction *restrict oldact);
 
 sighandler_t signal(int signum, sighandler_t handler);
+/* Signal 0 probes the existence/authority of a process; real kill uses the
+ * existing process capability path, not a simulated signal subsystem. */
+int kill(pid_t pid, int sig);
 int raise(int sig);
 
 #endif /* _SIGNAL_H */

@@ -90,8 +90,23 @@ $(NXSDK_ARCHIVE): $(NXSDK_LIB_OBJECTS) $(NXSDK_MALLOC_OBJECT)
 	@rm -f $@
 	@$(AR) rcs $@ $^
 
-check: check-contracts check-header-boundary check-toolchain check-keyboard-layout module
+check: check-contracts check-header-boundary check-toolchain check-keyboard-layout check-gfx-chrome module
 	@echo "NX-SDK $(ARCH) check passed"
+
+.PHONY: check-gfx-chrome
+# Test the actual SDK raster and per-instance theme implementation on the host.
+# SDK contract headers are after the host standard library for this native test.
+check-gfx-chrome:
+	@mkdir -p "$(BUILD_ROOT)/host"
+	@$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Wpedantic \
+	  -Ilib/extensions/LIBGRAPHICS/include \
+	  -idirafter include/contract -idirafter include/api \
+	  lib/gfx/alpha.c lib/gfx/raster.c \
+	  lib/extensions/LIBGRAPHICS/chrome.c \
+	  lib/extensions/LIBGRAPHICS/decoration.c \
+	  lib/extensions/LIBGRAPHICS/theme.c \
+	  lib/tests/gfx_chrome_test.c -o "$(BUILD_ROOT)/host/gfx_chrome_test"
+	@"$(BUILD_ROOT)/host/gfx_chrome_test"
 
 check-keyboard-layout:
 	@mkdir -p "$(BUILD_ROOT)/host"
